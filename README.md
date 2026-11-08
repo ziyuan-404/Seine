@@ -61,48 +61,48 @@
     <td width="50%" align="center">
       <p><strong>背屏应用列表</strong></p>
       <a href="./docs/images/rear-app-list.png"><img src="./docs/images/rear-app-list.png" width="460" alt="背屏应用列表"></a>
-      <p>在背屏浏览并打开允许的应用。</p>
+      <p>在背屏浏览并打开允许的应用</p>
     </td>
     <td width="50%" align="center">
       <p><strong>背屏运行应用</strong></p>
       <a href="./docs/images/rear-app-xiaohongshu.png"><img src="./docs/images/rear-app-xiaohongshu.png" width="460" alt="背屏运行应用"></a>
-      <p>小红书背屏运行展示。</p>
+      <p>小红书背屏运行展示</p>
     </td>
   </tr>
   <tr>
     <td width="50%" align="center">
       <p><strong>背屏通知卡片</strong></p>
       <a href="./docs/images/rear-notification.png"><img src="./docs/images/rear-notification.png" width="460" alt="背屏通知卡片"></a>
-      <p>展示应用图标、通知内容与分组入口。</p>
+      <p>展示应用图标、通知内容与分组入口</p>
     </td>
     <td width="50%" align="center">
       <p><strong>分组通知</strong></p>
       <a href="./docs/images/rear-grouped-notification.png"><img src="./docs/images/rear-grouped-notification.png" width="460" alt="分组通知"></a>
-      <p>同一应用的多条通知集中展示。</p>
+      <p>同一应用的多条通知集中展示</p>
     </td>
   </tr>
   <tr>
     <td width="50%" align="center">
       <p><strong>通知详情入口</strong></p>
       <a href="./docs/images/rear-private-notification.png"><img src="./docs/images/rear-private-notification.png" width="460" alt="通知详情入口"></a>
-      <p>通知概览与点按查看详情入口。</p>
+      <p>通知概览与快捷打开入口</p>
     </td>
     <td width="50%" align="center">
       <p><strong>下载进度卡片</strong></p>
       <a href="./docs/images/rear-download.png"><img src="./docs/images/rear-download.png" width="460" alt="下载进度卡片"></a>
-      <p>背屏展示下载进度与通知操作。</p>
+      <p>背屏展示下载进度与通知操作</p>
     </td>
   </tr>
   <tr>
     <td width="50%" align="center">
       <p><strong>录音卡片</strong></p>
       <a href="./docs/images/rear-recorder.png"><img src="./docs/images/rear-recorder.png" width="460" alt="录音卡片"></a>
-      <p>原生计时与录音控制。</p>
+      <p>原生计时与录音控制</p>
     </td>
     <td width="50%" align="center">
       <p><strong>秒表卡片</strong></p>
       <a href="./docs/images/rear-stopwatch.png"><img src="./docs/images/rear-stopwatch.png" width="460" alt="秒表卡片"></a>
-      <p>背屏计时与快捷控制。</p>
+      <p>背屏计时与快捷控制</p>
     </td>
   </tr>
 </table>
