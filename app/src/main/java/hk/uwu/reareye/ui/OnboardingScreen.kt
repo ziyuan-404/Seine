@@ -90,7 +90,7 @@ fun OnboardingScreen(
     }
 
     fun refreshPermissions() {
-        XposedModuleStatus.refresh()
+        XposedModuleStatus.refreshAsync()
         scope.launch {
             val root = withContext(Dispatchers.IO) { RootHelper.hasRootAccess() }
             permissionSnapshot = permissionSnapshot.copy(

@@ -127,6 +127,7 @@ internal class NativeRearAppIcons(
         // radial fisheye plus vertical-edge horizontal compression.
         cells.forEachIndexed { index,cell ->
             val child=getChildAt(index)
+            if (RearLaunchOrigin.ownsSource(child)) return@forEachIndexed
             val x=cell.left+cell.size/2f
             val y=origin[1]+cell.top+cell.size/2f
             val distance=(hypot(x-centerX,y-centerY)/radius).coerceIn(0f,1f)

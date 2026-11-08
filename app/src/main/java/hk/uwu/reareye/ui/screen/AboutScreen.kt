@@ -3,6 +3,8 @@ package hk.uwu.reareye.ui.screen
 import android.content.Intent
 import android.graphics.BitmapFactory
 import androidx.activity.compose.BackHandler
+import androidx.annotation.DrawableRes
+import androidx.annotation.StringRes
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.FastOutLinearInEasing
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -27,12 +29,12 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
-import androidx.compose.foundation.layout.calculateEndPadding
-import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -41,39 +43,34 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.input.nestedscroll.nestedScroll
-import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
@@ -81,7 +78,7 @@ import androidx.compose.ui.unit.sp
 import androidx.core.net.toUri
 import dev.chrisbanes.haze.HazeState
 import hk.uwu.reareye.R
-import hk.uwu.reareye.generated.AppProperties
+import hk.uwu.reareye.ui.components.SeineWordmark
 import hk.uwu.reareye.repository.contributor.ContributorLoadState
 import hk.uwu.reareye.repository.contributor.ContributorProfile
 import hk.uwu.reareye.repository.contributor.ContributorRepository
@@ -92,23 +89,22 @@ import hk.uwu.reareye.ui.theme.rearAcrylicEffect
 import hk.uwu.reareye.ui.theme.rearAcrylicSource
 import hk.uwu.reareye.ui.theme.rememberAcrylicHazeState
 import hk.uwu.reareye.ui.theme.rememberAcrylicHazeStyle
-import hk.uwu.reareye.utils.blend.ColorBlendToken
 import hk.uwu.reareye.utils.effect.BgEffectBackground
 import hk.uwu.reareye.utils.other.DeviceConfigTools
 import hk.uwu.reareye.utils.other.LibraryItem
 import hk.uwu.reareye.utils.other.OSVersionTools
 import hk.uwu.reareye.utils.other.loadLibraries
 import hk.uwu.reareye.utils.pageContentPadding
+import ui.feice.mochi.navigation.LocalMochiBottomBarInset
+import ui.feice.mochi.navigation.MochiTabScaffoldDefaults
+import hk.uwu.reareye.version.SeineProject
+import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import top.yukonga.miuix.kmp.basic.BasicComponent
-import top.yukonga.miuix.kmp.basic.BasicComponentDefaults
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.Card
-import top.yukonga.miuix.kmp.basic.CardDefaults
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.InfiniteProgressIndicator
@@ -118,28 +114,17 @@ import top.yukonga.miuix.kmp.basic.ScrollBehavior
 import top.yukonga.miuix.kmp.basic.SmallTopAppBar
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TopAppBar
-import top.yukonga.miuix.kmp.blur.BlendColorEntry
-import top.yukonga.miuix.kmp.blur.BlurBlendMode
-import top.yukonga.miuix.kmp.blur.BlurColors
 import top.yukonga.miuix.kmp.blur.isRuntimeShaderSupported
-import top.yukonga.miuix.kmp.blur.layerBackdrop
-import top.yukonga.miuix.kmp.blur.rememberLayerBackdrop
-import top.yukonga.miuix.kmp.blur.textureBlur
 import top.yukonga.miuix.kmp.icon.MiuixIcons
-import top.yukonga.miuix.kmp.icon.extended.Create
-import top.yukonga.miuix.kmp.icon.extended.Download
-import top.yukonga.miuix.kmp.icon.extended.Info
 import top.yukonga.miuix.kmp.icon.extended.Link
 import top.yukonga.miuix.kmp.theme.MiuixTheme.colorScheme
 import top.yukonga.miuix.kmp.utils.overScrollVertical
 import top.yukonga.miuix.kmp.utils.scrollEndHaptic
-import java.util.concurrent.ConcurrentHashMap
+import ui.feice.mochi.icons.MochiIonicon
+import ui.feice.mochi.list.MochiListRow
+import ui.feice.mochi.list.MochiListSection
 
 private val AboutPageHorizontalPadding = 12.dp
-private val AboutDeviceInfoCardTopPadding = 20.dp
-private val AboutDeviceInfoCardBottomPadding = 12.dp
-private val AboutDeviceInfoRowVerticalPadding = 8.dp
-private val AboutDeviceInfoHeaderBottomSpacing = 8.dp
 private val AboutCardSpacing = 8.dp
 private val AboutGradientFadeDistance = 389.dp
 
@@ -199,51 +184,26 @@ private data class CreditEntry(
     val url: String,
 )
 
-private data class AboutVisualTokens(
-    val isDarkTheme: Boolean,
-    val backgroundColor: Color,
-    val cardBlendColors: List<BlendColorEntry>,
-    val logoBlendColors: List<BlendColorEntry>,
+private data class SourceReference(
+    val title: String,
+    @param:StringRes val descriptionRes: Int,
+    val url: String? = null,
 )
 
-@Composable
-private fun rememberAboutVisualTokens(): AboutVisualTokens {
-    val surface = colorScheme.surface
-    val isDarkTheme = surface.luminance() < 0.5f
+private val CodeReferences = listOf(
+    SourceReference("REAREye", R.string.seine_reference_reareye, SeineProject.UPSTREAM),
+    SourceReference("Mochi Compose", R.string.seine_reference_mochi, "https://github.com/feice11/mochi-compose"),
+    SourceReference(
+        "MiRearScreenSwitcher",
+        R.string.seine_reference_mrss,
+        "https://github.com/AntiOblivionis/MiRearScreenSwitcher",
+    ),
+)
 
-    return remember(surface, isDarkTheme) {
-        AboutVisualTokens(
-            isDarkTheme = isDarkTheme,
-            backgroundColor = surface,
-            cardBlendColors = aboutCardBlendColors(isDarkTheme),
-            logoBlendColors = aboutLogoBlendColors(isDarkTheme),
-        )
-    }
-}
-
-private fun aboutCardBlendColors(isDarkTheme: Boolean): List<BlendColorEntry> {
-    return if (isDarkTheme) {
-        ColorBlendToken.Overlay_Thin_Light
-    } else {
-        ColorBlendToken.Pured_Regular_Light
-    }
-}
-
-private fun aboutLogoBlendColors(isDarkTheme: Boolean): List<BlendColorEntry> {
-    return if (isDarkTheme) {
-        listOf(
-            BlendColorEntry(Color(0xe6a1a1a1), BlurBlendMode.ColorDodge),
-            BlendColorEntry(Color(0x4de6e6e6), BlurBlendMode.LinearLight),
-            BlendColorEntry(Color(0xff1af500), BlurBlendMode.Lab),
-        )
-    } else {
-        listOf(
-            BlendColorEntry(Color(0xcc4a4a4a), BlurBlendMode.ColorBurn),
-            BlendColorEntry(Color(0xff4f4f4f), BlurBlendMode.LinearLight),
-            BlendColorEntry(Color(0xff1af200), BlurBlendMode.Lab),
-        )
-    }
-}
+private val DesignReferences = listOf(
+    SourceReference("Folia", R.string.seine_reference_folia),
+    SourceReference("STRAY洋葱", R.string.seine_reference_stray),
+)
 
 @Composable
 private fun rememberSkeletonPulseAlpha(label: String): Float {
@@ -263,14 +223,12 @@ private fun rememberSkeletonPulseAlpha(label: String): Float {
 @Composable
 fun AboutScreen(
     bottomInnerPadding: Dp = 0.dp,
-    onOpenPresetPackDialog: () -> Unit = {},
 ) {
-    val versionText = rememberVersionText()
+    val versionText = SeineProject.CURRENT_RELEASE.removePrefix("v")
     val contributorState by ContributorRepository.state.collectAsState()
     val lazyListState = rememberLazyListState()
 
     var route by remember { mutableStateOf<AboutRoute>(AboutRoute.Root) }
-    var animateRootContent by remember { mutableStateOf(true) }
     val animatedRoute = remember(route) {
         AboutAnimatedRoute(
             route = route,
@@ -283,28 +241,23 @@ fun AboutScreen(
             CreditEntry(
                 titleRes = R.string.credits_github_title,
                 summaryRes = R.string.credits_github_desc,
-                url = "https://github.com/killerprojecte/REAREye",
+                url = SeineProject.REPOSITORY,
+            ),
+            CreditEntry(
+                titleRes = R.string.seine_upstream_title,
+                summaryRes = R.string.seine_upstream_summary,
+                url = SeineProject.UPSTREAM,
+            ),
+            CreditEntry(
+                titleRes = R.string.credits_afdian_title,
+                summaryRes = R.string.seine_upstream_afdian_summary,
+                url = "https://ifdian.net/a/rgbmc",
             ),
             CreditEntry(
                 titleRes = R.string.credits_docs,
                 summaryRes = R.string.credits_docs_desc,
                 url = "https://reareye.uwu.hk"
             ),
-            CreditEntry(
-                titleRes = R.string.credits_afdian_title,
-                summaryRes = R.string.credits_afdian_desc,
-                url = "https://ifdian.net/a/rgbmc",
-            ),
-            CreditEntry(
-                titleRes = R.string.credits_qq_title,
-                summaryRes = R.string.credits_qq_desc,
-                url = "https://qm.qq.com/q/cg2MU3kw6W"
-            ),
-            CreditEntry(
-                titleRes = R.string.credits_coolapk_title,
-                summaryRes = R.string.credits_coolapk_desc,
-                url = "https://www.coolapk.com/u/7190992"
-            )
         )
     }
 
@@ -371,22 +324,19 @@ fun AboutScreen(
         label = "AboutRouteTransition",
     ) { target ->
         when (target.route) {
-            AboutRoute.Root -> AboutRootPage(
-                bottomInnerPadding = bottomInnerPadding,
-                versionText = versionText,
-                entries = entries,
-                lazyListState = lazyListState,
-                animateEnter = animateRootContent,
-                onOpenContributors = {
-                    animateRootContent = false
-                    route = AboutRoute.Contributors
-                },
-                onOpenLibraries = {
-                    animateRootContent = false
-                    route = AboutRoute.Licenses
-                },
-                onOpenPresetPackDialog = onOpenPresetPackDialog,
-            )
+            AboutRoute.Root -> CompositionLocalProvider(LocalMochiBottomBarInset provides bottomInnerPadding) {
+                AboutRootPage(
+                    versionText = versionText,
+                    entries = entries,
+                    lazyListState = lazyListState,
+                    onOpenContributors = {
+                        route = AboutRoute.Contributors
+                    },
+                    onOpenLibraries = {
+                        route = AboutRoute.Licenses
+                    },
+                )
+            }
 
             AboutRoute.Contributors -> AboutSecondaryPage(
                 title = stringResource(R.string.credits_contributors_title),
@@ -418,14 +368,11 @@ fun AboutScreen(
 
 @Composable
 private fun AboutRootPage(
-    bottomInnerPadding: Dp,
     versionText: String,
     entries: List<CreditEntry>,
     lazyListState: LazyListState,
-    animateEnter: Boolean,
     onOpenContributors: () -> Unit,
     onOpenLibraries: () -> Unit,
-    onOpenPresetPackDialog: () -> Unit,
 ) {
     val scrollBehavior = MiuixScrollBehavior()
     val hazeState = rememberAcrylicHazeState()
@@ -458,7 +405,6 @@ private fun AboutRootPage(
         }
     ) { paddingValues ->
         AboutRootContent(
-            bottomInnerPadding = bottomInnerPadding,
             paddingValues = paddingValues,
             scrollBehavior = scrollBehavior,
             hazeState = hazeState,
@@ -468,10 +414,143 @@ private fun AboutRootPage(
             scrollProgress = scrollProgress,
             lazyListState = lazyListState,
             onOpenLibraries = onOpenLibraries,
-            onOpenPresetPackDialog = onOpenPresetPackDialog,
-            animateEnter = animateEnter,
         )
     }
+}
+
+@Composable
+private fun AboutRootContent(
+    paddingValues: PaddingValues,
+    scrollBehavior: ScrollBehavior,
+    hazeState: HazeState,
+    versionText: String,
+    entries: List<CreditEntry>,
+    onOpenContributors: () -> Unit,
+    scrollProgress: Float,
+    lazyListState: LazyListState,
+    onOpenLibraries: () -> Unit,
+) {
+    val context = LocalContext.current
+    val surface = colorScheme.surface
+    val darkTheme = surface.luminance() < 0.5f
+    val runtimeShaderSupported = remember { isRuntimeShaderSupported() }
+    val scrollPadding = pageContentPadding(
+        paddingValues,
+        paddingValues,
+        false,
+        extraStart = WindowInsets.displayCutout.asPaddingValues()
+            .calculateLeftPadding(LayoutDirection.Ltr),
+        extraEnd = WindowInsets.displayCutout.asPaddingValues()
+            .calculateRightPadding(LayoutDirection.Ltr),
+    )
+
+    BgEffectBackground(
+        dynamicBackground = runtimeShaderSupported,
+        modifier = Modifier.fillMaxSize(),
+        backgroundColor = surface,
+        isDarkTheme = darkTheme,
+        effectBackground = runtimeShaderSupported,
+        alpha = { 1f - scrollProgress },
+    ) {
+        LazyColumn(
+            state = lazyListState,
+            modifier = Modifier
+                .fillMaxSize()
+                .scrollEndHaptic()
+                .overScrollVertical()
+                .nestedScroll(scrollBehavior.nestedScrollConnection)
+                .rearAcrylicSource(hazeState)
+                .padding(horizontal = AboutPageHorizontalPadding),
+            contentPadding = PaddingValues(
+                top = scrollPadding.calculateTopPadding(),
+                bottom = MochiTabScaffoldDefaults.contentBottomPadding(),
+            ),
+        ) {
+            item(key = "project_hero") {
+                Column(
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 340.dp).padding(vertical = 32.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically),
+                ) {
+                    SeineWordmark(
+                        width = 222.dp,
+                        color = if (darkTheme) colorScheme.onBackground else Color(0xFF682753),
+                    )
+                    Text(
+                        text = versionText,
+                        color = colorScheme.onSurfaceVariantSummary,
+                        fontSize = 14.sp,
+                        textAlign = TextAlign.Center,
+                    )
+                }
+            }
+
+            item(key = "content") {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(AboutCardSpacing),
+                ) {
+                    AboutDeviceInfoCard()
+
+                    MochiListSection {
+                        entries.forEach { entry ->
+                            MochiListRow(
+                                title = stringResource(entry.titleRes),
+                                subtitle = stringResource(entry.summaryRes),
+                                leading = { MochiIonicon("link") },
+                                onClick = { context.startActivity(Intent(Intent.ACTION_VIEW, entry.url.toUri())) },
+                                chevron = true,
+                            )
+                        }
+                        MochiListRow(
+                            stringResource(R.string.credits_contributors_title),
+                            leading = { MochiIonicon("people") },
+                            onClick = onOpenContributors,
+                            chevron = true,
+                        )
+                        MochiListRow(
+                            stringResource(R.string.licenses_name),
+                            leading = { MochiIonicon("document-text") },
+                            onClick = onOpenLibraries,
+                            chevron = true,
+                        )
+                    }
+                }
+            }
+
+        }
+    }
+}
+
+@Composable
+private fun AboutDeviceInfoCard() {
+    val context = LocalContext.current
+    val osVersion = remember(context) { OSVersionTools.addVersionSuffix(context) }
+    MochiListSection {
+        AboutDeviceInfoRow(stringResource(R.string.device_name), DeviceConfigTools.deviceName)
+        AboutDeviceInfoRow(stringResource(R.string.about_device_model), DeviceConfigTools.marketName)
+        AboutDeviceInfoRow(stringResource(R.string.os_version), osVersion)
+        AboutDeviceInfoRow(stringResource(R.string.android_version), DeviceConfigTools.androidVersion)
+    }
+}
+
+@Composable
+private fun AboutDeviceInfoRow(title: String, value: String) {
+    MochiListRow(
+        title = title,
+        trailing = {
+            Text(
+                text = value,
+                modifier = Modifier.widthIn(max = 220.dp),
+                color = colorScheme.onSurfaceVariantSummary,
+                fontSize = 15.sp,
+                textAlign = TextAlign.End,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+        },
+    )
 }
 
 @Composable
@@ -516,538 +595,6 @@ private fun AboutSecondaryPage(
 }
 
 @Composable
-private fun AboutRootContent(
-    bottomInnerPadding: Dp,
-    paddingValues: PaddingValues,
-    scrollBehavior: ScrollBehavior,
-    hazeState: HazeState,
-    versionText: String,
-    entries: List<CreditEntry>,
-    onOpenContributors: () -> Unit,
-    scrollProgress: Float,
-    lazyListState: LazyListState,
-    onOpenLibraries: () -> Unit,
-    onOpenPresetPackDialog: () -> Unit,
-    animateEnter: Boolean,
-) {
-    val context = LocalContext.current
-    val visualTokens = rememberAboutVisualTokens()
-
-    val backdrop = rememberLayerBackdrop()
-
-    val scrollPadding = pageContentPadding(
-        paddingValues,
-        paddingValues,
-        false,
-        extraStart = WindowInsets.displayCutout.asPaddingValues()
-            .calculateLeftPadding(LayoutDirection.Ltr),
-        extraEnd = WindowInsets.displayCutout.asPaddingValues()
-            .calculateRightPadding(LayoutDirection.Ltr),
-    )
-    val logoPadding = pageContentPadding(
-        paddingValues,
-        paddingValues,
-        false,
-        extraTop = 10.dp,
-        extraStart = WindowInsets.displayCutout.asPaddingValues()
-            .calculateLeftPadding(LayoutDirection.Ltr),
-        extraEnd = WindowInsets.displayCutout.asPaddingValues()
-            .calculateRightPadding(LayoutDirection.Ltr),
-    )
-
-    val density = LocalDensity.current
-    var logoHeightDp by remember { mutableStateOf(200.dp) }
-    var logoAreaY by remember { mutableFloatStateOf(0f) }
-    var iconY by remember { mutableFloatStateOf(0f) }
-    var projectNameY by remember { mutableFloatStateOf(0f) }
-    var versionCodeY by remember { mutableFloatStateOf(0f) }
-
-    var iconProgress by remember { mutableFloatStateOf(0f) }
-    var projectNameProgress by remember { mutableFloatStateOf(0f) }
-    var versionCodeProgress by remember { mutableFloatStateOf(0f) }
-    var initialLogoAreaY by remember { mutableFloatStateOf(0f) }
-    val runtimeShaderSupported = remember { isRuntimeShaderSupported() }
-
-
-    LaunchedEffect(lazyListState) {
-        snapshotFlow { lazyListState.firstVisibleItemScrollOffset }
-            .onEach { offset ->
-                if (lazyListState.firstVisibleItemIndex > 0) {
-                    if (iconProgress != 1f) iconProgress = 1f
-                    if (projectNameProgress != 1f) projectNameProgress = 1f
-                    return@onEach
-                }
-
-                if (initialLogoAreaY == 0f && logoAreaY > 0f) {
-                    initialLogoAreaY = logoAreaY
-                }
-                val refLogoAreaY = if (initialLogoAreaY > 0f) initialLogoAreaY else logoAreaY
-
-                val stage1TotalLength = refLogoAreaY - versionCodeY
-                val stage2TotalLength = versionCodeY - projectNameY
-                val stage3TotalLength = projectNameY - iconY
-
-                val versionCodeDelay = stage1TotalLength * 0.5f
-                versionCodeProgress =
-                    ((offset.toFloat() - versionCodeDelay) / (stage1TotalLength - versionCodeDelay).coerceAtLeast(
-                        1f
-                    ))
-                        .coerceIn(0f, 1f)
-                projectNameProgress =
-                    ((offset.toFloat() - stage1TotalLength) / stage2TotalLength.coerceAtLeast(1f))
-                        .coerceIn(0f, 1f)
-                iconProgress =
-                    ((offset.toFloat() - stage1TotalLength - stage2TotalLength) / stage3TotalLength.coerceAtLeast(
-                        1f
-                    ))
-                        .coerceIn(0f, 1f)
-            }
-            .collect { }
-    }
-    BgEffectBackground(
-        dynamicBackground = runtimeShaderSupported,
-        modifier = Modifier.fillMaxSize(),
-        bgModifier = Modifier.layerBackdrop(backdrop),
-        backgroundColor = visualTokens.backgroundColor,
-        isDarkTheme = visualTokens.isDarkTheme,
-        effectBackground = runtimeShaderSupported,
-        alpha = { 1f - scrollProgress },
-    ) {
-        // ── 修改：Logo 固定悬浮在 LazyColumn 下方，与 AboutPage 结构一致 ──
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(
-                    top = logoPadding.calculateTopPadding() + 52.dp,
-                    start = logoPadding.calculateLeftPadding(LayoutDirection.Ltr),
-                    end = logoPadding.calculateRightPadding(LayoutDirection.Ltr),
-                )
-                .onSizeChanged { size ->
-                    with(density) { logoHeightDp = size.height.toDp() }
-                },
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            // 图标
-            Box(
-                contentAlignment = Alignment.Center,
-                modifier = Modifier
-                    .size(90.dp)
-                    .graphicsLayer {
-                        alpha = 1 - iconProgress
-                        scaleX = 1 - (iconProgress * 0.05f)
-                        scaleY = 1 - (iconProgress * 0.05f)
-                    }
-                    .onGloballyPositioned { coordinates ->
-                        if (iconY != 0f) return@onGloballyPositioned
-                        val y = coordinates.positionInWindow().y
-                        val size = coordinates.size
-                        iconY = y + size.height
-                    },
-            ) {
-                Image(
-                    modifier = Modifier
-                        .size(90.dp)
-                        .textureBlur(
-                            backdrop = backdrop,
-                            shape = RoundedCornerShape(24.dp),
-                            blurRadius = 150f,
-                            colors = BlurColors(
-                                blendColors = visualTokens.logoBlendColors,
-                            ),
-                            contentBlendMode = BlendMode.DstIn,
-                            enabled = true,
-                        ),
-                    painter = painterResource(R.drawable.ic_about_logo_hollow),
-                    contentDescription = null,
-                )
-            }
-
-            // 应用名称（带 textureBlur + 消失动画）
-            Text(
-                modifier = Modifier
-                    .padding(top = 12.dp, bottom = 5.dp)
-                    .onGloballyPositioned { coordinates ->
-                        if (projectNameY != 0f) return@onGloballyPositioned
-                        val y = coordinates.positionInWindow().y
-                        val size = coordinates.size
-                        projectNameY = y + size.height
-                    }
-                    .graphicsLayer {
-                        alpha = 1 - projectNameProgress
-                        scaleX = 1 - (projectNameProgress * 0.05f)
-                        scaleY = 1 - (projectNameProgress * 0.05f)
-                    }
-                    .textureBlur(
-                        backdrop = backdrop,
-                        shape = RoundedCornerShape(16.dp),
-                        blurRadius = 150f,
-                        colors = BlurColors(
-                            blendColors = visualTokens.logoBlendColors,
-                        ),
-                        contentBlendMode = BlendMode.DstIn,
-                        enabled = true,
-                    ),
-                text = stringResource(R.string.app_name),
-                color = colorScheme.onBackground,
-                fontWeight = FontWeight.Bold,
-                fontSize = 35.sp,
-            )
-
-            // ── 修改：版本号补上 graphicsLayer 动画 + onGloballyPositioned 追踪 ──
-            Text(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .graphicsLayer {
-                        alpha = 1 - versionCodeProgress
-                        scaleX = 1 - (versionCodeProgress * 0.05f)
-                        scaleY = 1 - (versionCodeProgress * 0.05f)
-                    }
-                    .onGloballyPositioned { coordinates ->
-                        if (versionCodeY != 0f) return@onGloballyPositioned
-                        val y = coordinates.positionInWindow().y
-                        val size = coordinates.size
-                        versionCodeY = y + size.height
-                    },
-                color = colorScheme.onSurfaceVariantSummary,
-                text = versionText,
-                fontSize = 14.sp,
-                textAlign = TextAlign.Center,
-            )
-        }
-
-        LazyColumn(
-            state = lazyListState,
-            modifier = Modifier
-                .fillMaxSize()
-                .scrollEndHaptic()
-                .overScrollVertical()
-                .nestedScroll(scrollBehavior.nestedScrollConnection)
-                .rearAcrylicSource(hazeState)
-                .padding(horizontal = AboutPageHorizontalPadding),
-            contentPadding = PaddingValues(
-                top = scrollPadding.calculateTopPadding(),
-                bottom = paddingValues.calculateBottomPadding() + bottomInnerPadding,
-            ),
-        ) {
-            // ── 透明占位，高度与 Logo 区域匹配，LazyColumn 滑过它时 Logo 淡出 ──
-            item(key = "logoSpacer") {
-                Box(
-                    Modifier
-                        .fillMaxWidth()
-                        .height(
-                            logoHeightDp + 52.dp + logoPadding.calculateTopPadding() - scrollPadding.calculateTopPadding() + 126.dp,
-                        )
-                        .onGloballyPositioned { coordinates ->
-                            val y = coordinates.positionInWindow().y
-                            val size = coordinates.size
-                            logoAreaY = y + size.height
-                        },
-                    contentAlignment = Alignment.TopCenter,
-                    content = { },
-                )
-            }
-
-            item(key = "content") {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = scrollPadding.calculateBottomPadding()),
-                    verticalArrangement = Arrangement.spacedBy(AboutCardSpacing),
-                ) {
-                    AboutDeviceInfoCard(
-                        context = context,
-                        backdrop = backdrop,
-                        visualTokens = visualTokens,
-                        animateEnter = animateEnter,
-                    )
-
-                    Card(
-                        modifier = Modifier.textureBlur(
-                            backdrop = backdrop,
-                            shape = RoundedCornerShape(16.dp),
-                            blurRadius = 60f,
-                            noiseCoefficient = 0.001f,
-                            colors = BlurColors(
-                                blendColors = visualTokens.cardBlendColors,
-                                brightness = 0f,
-                                contrast = 1f,
-                                saturation = 1f,
-                            ),
-                            enabled = true,
-                        ),
-                        colors = CardDefaults.defaultColors(
-                            Color.Transparent,
-                            Color.Transparent,
-                        ),
-                    ) {
-                        SuperCard(
-                            title = stringResource(R.string.preset_pack_title),
-                            summary = stringResource(R.string.preset_pack_summary),
-                            onClick = onOpenPresetPackDialog,
-                            endActions = {
-                                Icon(
-                                    imageVector = MiuixIcons.Download,
-                                    tint = colorScheme.onSurface,
-                                    contentDescription = null,
-                                )
-                            },
-                        )
-                    }
-
-                    Column(
-                        verticalArrangement = Arrangement.spacedBy(AboutCardSpacing),
-                    ) {
-                        AboutReveal(
-                            enabled = animateEnter,
-                            revealKey = "contributors",
-                            delayMillis = 36,
-                        ) {
-                            Card(
-                                modifier = Modifier
-                                    .textureBlur(
-                                        backdrop = backdrop,
-                                        shape = RoundedCornerShape(16.dp),
-                                        blurRadius = 60f,
-                                        noiseCoefficient = 0.001f,
-                                        colors = BlurColors(
-                                            blendColors = visualTokens.cardBlendColors,
-                                            brightness = 0f,
-                                            contrast = 1f,
-                                            saturation = 1f,
-                                        ),
-                                        enabled = true,
-                                    ),
-                                colors = CardDefaults.defaultColors(
-                                    Color.Transparent,
-                                    Color.Transparent,
-                                ),
-                            ) {
-                                SuperCard(
-                                    title = stringResource(R.string.credits_contributors_title),
-                                    summary = stringResource(R.string.credits_contributors_desc),
-                                    onClick = onOpenContributors,
-                                    endActions = {
-                                        Icon(
-                                            imageVector = MiuixIcons.Create,
-                                            tint = colorScheme.onSurface,
-                                            contentDescription = null
-                                        )
-                                    }
-                                )
-                            }
-                        }
-
-                        entries.forEachIndexed { index, entry ->
-                            AboutReveal(
-                                enabled = animateEnter,
-                                revealKey = entry.url,
-                                delayMillis = (54 + index * 18).coerceAtMost(150),
-                            ) {
-                                Card(
-                                    modifier = Modifier
-                                        .textureBlur(
-                                            backdrop = backdrop,
-                                            shape = RoundedCornerShape(16.dp),
-                                            blurRadius = 60f,
-                                            noiseCoefficient = 0.001f,
-                                            colors = BlurColors(
-                                                blendColors = visualTokens.cardBlendColors,
-                                                brightness = 0f,
-                                                contrast = 1f,
-                                                saturation = 1f,
-                                            ),
-                                            enabled = true,
-                                        ),
-                                    colors = CardDefaults.defaultColors(
-                                        Color.Transparent,
-                                        Color.Transparent,
-                                    ),
-                                ) {
-                                    SuperCard(
-                                        title = stringResource(entry.titleRes),
-                                        summary = stringResource(entry.summaryRes),
-                                        onClick = {
-                                            context.startActivity(
-                                                Intent(
-                                                    Intent.ACTION_VIEW,
-                                                    entry.url.toUri()
-                                                )
-                                            )
-                                        },
-                                        endActions = {
-                                            Icon(
-                                                imageVector = MiuixIcons.Link,
-                                                tint = colorScheme.onSurface,
-                                                contentDescription = null
-                                            )
-                                        }
-                                    )
-                                }
-                            }
-                        }
-
-                        AboutReveal(
-                            enabled = animateEnter,
-                            revealKey = "licenses",
-                            delayMillis = (54 + entries.size * 18).coerceAtMost(150),
-                        ) {
-                            Card(
-                                modifier = Modifier
-                                    .textureBlur(
-                                        backdrop = backdrop,
-                                        shape = RoundedCornerShape(16.dp),
-                                        blurRadius = 60f,
-                                        noiseCoefficient = 0.001f,
-                                        colors = BlurColors(
-                                            blendColors = visualTokens.cardBlendColors,
-                                            brightness = 0f,
-                                            contrast = 1f,
-                                            saturation = 1f,
-                                        ),
-                                        enabled = true,
-                                    ),
-                                colors = CardDefaults.defaultColors(
-                                    Color.Transparent,
-                                    Color.Transparent,
-                                ),
-                            ) {
-                                SuperCard(
-                                    title = stringResource(R.string.licenses_name),
-                                    summary = stringResource(R.string.licenses_name_summary),
-                                    onClick = onOpenLibraries,
-                                    endActions = {
-                                        Icon(
-                                            imageVector = MiuixIcons.Info,
-                                            tint = colorScheme.onSurface,
-                                            contentDescription = null
-                                        )
-                                    }
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-
-        }
-    }
-}
-
-@Composable
-private fun AboutDeviceInfoCard(
-    context: android.content.Context,
-    backdrop: top.yukonga.miuix.kmp.blur.LayerBackdrop,
-    visualTokens: AboutVisualTokens,
-    animateEnter: Boolean,
-) {
-    AboutReveal(
-        enabled = animateEnter,
-        revealKey = "device_info_card",
-        delayMillis = 0,
-    ) {
-        val layoutDirection = LocalLayoutDirection.current
-        val deviceInfoCardPadding = PaddingValues(
-            start = BasicComponentDefaults.InsideMargin.calculateStartPadding(layoutDirection),
-            top = AboutDeviceInfoCardTopPadding,
-            end = BasicComponentDefaults.InsideMargin.calculateEndPadding(layoutDirection),
-            bottom = AboutDeviceInfoCardBottomPadding,
-        )
-        val deviceInfoRowPadding = PaddingValues(vertical = AboutDeviceInfoRowVerticalPadding)
-        val subscreenVer = DeviceConfigTools.getSubScreenVersion(context)
-
-        Card(
-            modifier = Modifier
-                .textureBlur(
-                    backdrop = backdrop,
-                    shape = RoundedCornerShape(16.dp),
-                    blurRadius = 60f,
-                    noiseCoefficient = 0.001f,
-                    colors = BlurColors(
-                        blendColors = visualTokens.cardBlendColors,
-                        brightness = 0f,
-                        contrast = 1f,
-                        saturation = 1f,
-                    ),
-                    enabled = true,
-                ),
-            colors = CardDefaults.defaultColors(
-                Color.Transparent,
-                Color.Transparent,
-            ),
-        ) {
-            Column(
-                modifier = Modifier.padding(deviceInfoCardPadding),
-            ) {
-                Text(
-                    text = DeviceConfigTools.deviceName,
-                    modifier = Modifier.padding(bottom = AboutDeviceInfoHeaderBottomSpacing),
-                    fontSize = 24.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = BasicComponentDefaults.titleColor().color,
-                )
-
-                BasicComponent(
-                    title = stringResource(R.string.device_name),
-                    summary = DeviceConfigTools.marketName,
-                    insideMargin = deviceInfoRowPadding,
-                )
-
-                BasicComponent(
-                    title = stringResource(R.string.android_version),
-                    summary = DeviceConfigTools.androidVersion,
-                    insideMargin = deviceInfoRowPadding,
-                )
-
-                BasicComponent(
-                    title = stringResource(R.string.os_version),
-                    summary = OSVersionTools.addVersionSuffix(context),
-                    insideMargin = deviceInfoRowPadding,
-                )
-
-                BasicComponent(
-                    title = stringResource(R.string.module_version_label),
-                    summary = rememberVersionText(),
-                    insideMargin = deviceInfoRowPadding,
-                )
-
-                BasicComponent(
-                    title = stringResource(R.string.version_codename_label),
-                    summary = AppProperties.PROJECT_APP_VERSION_CODENAME,
-                    insideMargin = deviceInfoRowPadding,
-                )
-
-                if (subscreenVer != "UNKNOWN") {
-                    BasicComponent(
-                        title = stringResource(R.string.subsceen_version),
-                        summary = subscreenVer,
-                        insideMargin = deviceInfoRowPadding,
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun AboutReveal(
-    enabled: Boolean,
-    revealKey: Any,
-    delayMillis: Int,
-    content: @Composable () -> Unit,
-) {
-    if (enabled) {
-        ArtStaggeredReveal(
-            visible = true,
-            revealKey = revealKey,
-            delayMillis = delayMillis,
-            content = content,
-        )
-    } else {
-        content()
-    }
-}
-
-@Composable
 private fun ContributorListContent(
     bottomInnerPadding: Dp,
     paddingValues: PaddingValues,
@@ -1056,6 +603,14 @@ private fun ContributorListContent(
     state: ContributorLoadState,
 ) {
     val avatarPlaceholderAlpha = rememberSkeletonPulseAlpha("contributor-avatar-skeleton")
+    val maintainerDescription = stringResource(R.string.seine_contributor_maintainer)
+    val maintainer = remember(maintainerDescription) {
+        ContributorProfile(
+            name = "ziyuan-404",
+            description = maintainerDescription,
+            link = "https://github.com/ziyuan-404",
+        )
+    }
 
     LazyColumn(
         modifier = Modifier
@@ -1074,6 +629,14 @@ private fun ContributorListContent(
     ) {
         item {
             Spacer(modifier = Modifier.height(12.dp))
+        }
+
+        item(key = "seine-maintainer") {
+            ContributorCard(
+                item = maintainer,
+                avatarPlaceholderAlpha = avatarPlaceholderAlpha,
+                avatarRes = R.drawable.seine_maintainer_avatar,
+            )
         }
 
         when (state) {
@@ -1116,33 +679,24 @@ private fun ContributorListContent(
             }
 
             is ContributorLoadState.Loaded -> {
-                if (state.contributors.isEmpty()) {
-                    item {
-                        ArtRevealItem(visible = true, delayMillis = 40) {
-                            Card(modifier = Modifier.fillMaxWidth()) {
-                                Text(
-                                    text = stringResource(R.string.credits_contributors_empty),
-                                    modifier = Modifier.padding(16.dp),
-                                )
-                            }
-                        }
-                    }
-                } else {
-                    itemsIndexed(
-                        state.contributors,
-                        key = { _, item -> item.link?.takeIf { it.isNotBlank() } ?: item.name },
-                    ) { index, item ->
-                        val revealKey = item.link?.takeIf { it.isNotBlank() } ?: item.name
-                        ArtStaggeredReveal(
-                            visible = true,
-                            revealKey = revealKey,
-                            delayMillis = (36 + index * 18).coerceAtMost(150),
-                        ) {
-                            ContributorCard(
-                                item = item,
-                                avatarPlaceholderAlpha = avatarPlaceholderAlpha,
-                            )
-                        }
+                val upstreamContributors = state.contributors.filterNot {
+                    it.name.equals(maintainer.name, ignoreCase = true) ||
+                        it.link?.trimEnd('/')?.equals(maintainer.link, ignoreCase = true) == true
+                }
+                itemsIndexed(
+                    upstreamContributors,
+                    key = { _, item -> item.link?.takeIf { it.isNotBlank() } ?: item.name },
+                ) { index, item ->
+                    val revealKey = item.link?.takeIf { it.isNotBlank() } ?: item.name
+                    ArtStaggeredReveal(
+                        visible = true,
+                        revealKey = revealKey,
+                        delayMillis = (36 + index * 18).coerceAtMost(150),
+                    ) {
+                        ContributorCard(
+                            item = item,
+                            avatarPlaceholderAlpha = avatarPlaceholderAlpha,
+                        )
                     }
                 }
             }
@@ -1178,6 +732,12 @@ private fun LicenseContent(
         verticalArrangement = Arrangement.spacedBy(8.dp),
         overscrollEffect = null,
     ) {
+        item(key = "code_references") {
+            SourceReferenceSection(stringResource(R.string.seine_reference_code_title), CodeReferences)
+        }
+        item(key = "design_references") {
+            SourceReferenceSection(stringResource(R.string.seine_reference_design_title), DesignReferences)
+        }
         items(data.libraries) {
             LibraryItem(it, data.licenses)
         }
@@ -1186,9 +746,27 @@ private fun LicenseContent(
 }
 
 @Composable
+private fun SourceReferenceSection(title: String, references: List<SourceReference>) {
+    val context = LocalContext.current
+    MochiListSection(header = title) {
+        references.forEach { reference ->
+            MochiListRow(
+                title = reference.title,
+                subtitle = stringResource(reference.descriptionRes),
+                chevron = reference.url != null,
+                onClick = reference.url?.let { url ->
+                    { context.startActivity(Intent(Intent.ACTION_VIEW, url.toUri())) }
+                },
+            )
+        }
+    }
+}
+
+@Composable
 private fun ContributorCard(
     item: ContributorProfile,
     avatarPlaceholderAlpha: Float,
+    @DrawableRes avatarRes: Int? = null,
 ) {
     val context = LocalContext.current
     val link = item.link?.takeIf { it.isNotBlank() }
@@ -1202,6 +780,7 @@ private fun ContributorCard(
                 ContributorAvatar(
                     avatarUrl = item.avatar,
                     placeholderAlpha = avatarPlaceholderAlpha,
+                    avatarRes = avatarRes,
                 )
             },
             onClick = link?.let { targetLink ->
@@ -1223,15 +802,11 @@ private fun ContributorCard(
 }
 
 @Composable
-private fun rememberVersionText(): String {
-    return "${AppProperties.PROJECT_APP_VERSION_NAME}-${AppProperties.GIT_HASH}-r${AppProperties.BUILD_NUMBER}-${AppProperties.BUILD_CHANNEL}"
-}
-
-@Composable
 private fun ContributorAvatar(
     avatarUrl: String?,
     placeholderAlpha: Float,
     modifier: Modifier = Modifier,
+    @DrawableRes avatarRes: Int? = null,
 ) {
     var imageBitmap by remember(avatarUrl) {
         mutableStateOf(ContributorAvatarCache.peek(avatarUrl))
@@ -1245,7 +820,21 @@ private fun ContributorAvatar(
         imageBitmap = ContributorAvatarCache.load(avatarUrl)
     }
 
-    if (imageBitmap != null) {
+    if (avatarRes != null) {
+        Image(
+            painter = painterResource(avatarRes),
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            modifier = modifier.size(42.dp).clip(CircleShape),
+        )
+    } else if (avatarUrl.isNullOrBlank()) {
+        Box(
+            modifier = modifier.size(42.dp).clip(CircleShape).background(colorScheme.secondaryContainer),
+            contentAlignment = Alignment.Center,
+        ) {
+            MochiIonicon("person", tint = colorScheme.onSecondaryContainer)
+        }
+    } else if (imageBitmap != null) {
         Image(
             bitmap = imageBitmap!!,
             contentDescription = null,

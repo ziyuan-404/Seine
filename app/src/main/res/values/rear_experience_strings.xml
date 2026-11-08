@@ -1,7 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="rear_notification_front_apps">通知点按后转主屏的应用</string>
-    <string name="rear_notification_front_apps_desc">所有打开页面的通知均自动在主屏打开并显示翻转提示，包括 QQ、微信、抖音及下载详情。暂停、继续等通知操作按钮保持原功能。</string>
     <string name="rear_screen_timeout">背屏亮屏时长</string>
     <string name="rear_screen_timeout_desc">背屏桌面与下拉面板在最后一次操作后继续亮屏所选时长，之后恢复系统息屏。手动息屏仍生效。修改后重启背屏中心。</string>
     <string name="rear_timeout_system">跟随系统</string>
@@ -17,13 +15,20 @@
     <string name="rear_notification_sync_apps">同步通知的应用</string>
     <string name="rear_notification_scope_none">当前范围：未选择应用，不同步通知</string>
     <string name="rear_notification_scope_selected">当前范围：仅所选 %1$d 个应用</string>
-    <string name="rear_notification_selection_hint">仅勾选的应用会同步到背屏，全部不勾选则不同步。右上角菜单可全选或清空；修改后点击右下角保存。</string>
+    <string name="rear_notification_selection_hint">默认全部开启，并包含新安装的应用。可取消不需要的应用，全部不勾选则不同步。右上角菜单可全选或清空，修改后点击右下角保存。</string>
     <string name="rear_notification_select_all_apps">全选已安装应用</string>
     <string name="rear_charging_category">充电显示</string>
     <string name="rear_charging_category_desc">优先显示充电动画，再恢复通知展示。</string>
-    <string name="rear_notification_sync_apps_desc">白名单：仅勾选的应用会同步到背屏，未选择则不同步。原生通话、闹钟、倒计时和音乐卡片继续由系统处理。</string>
-    <string name="rear_liquid_charging">绿色液体充电动画</string>
-    <string name="rear_liquid_charging_desc">基于 MiRearScreenSwitcher 的液体效果，从下向上升至真实电量；插电后优先显示 8 秒，期间通知照常同步，结束后恢复通知展示。点击可提前退出。重启背屏中心后生效。</string>
-    <string name="rear_liquid_charging_persistent">亮屏充电时持续显示液体</string>
+    <string name="rear_notification_sync_apps_desc">默认同步全部应用，可在列表中自定义选择。原生通话、闹钟、倒计时和音乐卡片继续由系统处理。</string>
+    <string name="rear_liquid_charging">背屏充电动画</string>
+    <string name="rear_liquid_charging_desc">支持 MRSS 液体与柔光光晕两种样式；插电后优先显示 8 秒，期间通知照常同步，结束后恢复通知展示。点击可提前退出。样式修改立即生效。</string>
+    <string name="rear_liquid_charging_persistent">亮屏充电时持续显示</string>
     <string name="rear_liquid_charging_persistent_desc">背屏已亮且接通电源时持续显示，息屏停止动画。不会保持背屏常亮。</string>
+    <string name="rear_charging_style">充电动画样式</string>
+    <string name="rear_charging_style_desc">可随时切换；电量与充电挡位均跟随系统。</string>
+    <string name="rear_charging_style_mrss">MRSS 液体（原版移植）</string>
+    <string name="rear_charging_style_glow">柔光光晕与波浪</string>
+    <string name="rear_notification_privacy">隐私通知</string>
+    <string name="rear_notification_privacy_desc">与原厂通知管理、背屏通知详情和锁屏隐私规则同步。隐私开启时，所有通知统一使用隐私布局；人脸验证通过后在原布局内展示详情。受系统隐藏详情规则限制时，请在系统通知管理中调整。</string>
+    <string name="rear_notification_privacy_failed">无法修改原厂隐私设置，请检查 Root 权限</string>
 </resources>

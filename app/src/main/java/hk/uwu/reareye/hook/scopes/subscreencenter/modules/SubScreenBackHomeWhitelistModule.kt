@@ -12,6 +12,7 @@ import hk.uwu.reareye.hook.utils.resolveDexKitFieldValue
 import hk.uwu.reareye.hook.utils.resolveDexKitMethodInjectionPoint
 import hk.uwu.reareye.hook.utils.resolveHookPackageVersionCode
 import hk.uwu.reareye.ui.config.ConfigKeys
+import hk.uwu.reareye.ui.config.RearAppDefaults
 import hk.uwu.roxyhook.PackageScope
 import hk.uwu.roxyhook.RoxyHooker
 import hk.uwu.roxyhook.HotReloadPolicy
@@ -61,8 +62,8 @@ class SubScreenBackHomeWhitelistModule : RoxyHooker() {
                     val whitelist = hookPrefs.getStringSet(
                         ConfigKeys.SUBSCREEN_LOCK_BACK_HOME_WHITELIST_APPS,
                     ).toMutableSet()
-                    if (hookPrefs.getBoolean(ConfigKeys.REAR_APP_ENABLED, false)) {
-                        whitelist.addAll(hookPrefs.getStringSet(ConfigKeys.ACTIVITIES_WHITELIST_APPS))
+                    if (hookPrefs.getBoolean(ConfigKeys.REAR_APP_ENABLED, RearAppDefaults.ENABLED)) {
+                        whitelist.addAll(hookPrefs.getStringSet(ConfigKeys.ACTIVITIES_WHITELIST_APPS, RearAppDefaults.ALLOWED_APPS))
                     }
                     if (reason != AOD_REASON || whitelist.isEmpty()) {
                         callOriginal(*args)

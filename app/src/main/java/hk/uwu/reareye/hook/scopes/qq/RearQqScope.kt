@@ -12,6 +12,7 @@ import hk.uwu.reareye.hook.activityhost.ActivityHostTaskConfigurationAdapter as 
 import hk.uwu.reareye.hook.support.YLog
 import hk.uwu.reareye.hook.support.hookPrefs
 import hk.uwu.reareye.ui.config.ConfigKeys
+import hk.uwu.reareye.ui.config.RearAppDefaults
 import hk.uwu.roxyhook.HotReloadPolicy
 import hk.uwu.roxyhook.PackageScope
 import hk.uwu.roxyhook.RoxyHooker
@@ -41,7 +42,7 @@ class RearQqScope : RoxyHooker() {
                 if(!active||readingConfiguration.get()==true)return null
                 readingConfiguration.set(true)
                 try {
-                if(!hookPrefs.getBoolean(ConfigKeys.REAR_APP_ENABLED,false))return null
+                if(!hookPrefs.getBoolean(ConfigKeys.REAR_APP_ENABLED, RearAppDefaults.ENABLED))return null
                 foreground.get()?.let { activity ->
                     // A native freeform task has an Activity override while the process's
                     // Application configuration can remain on display 0.
@@ -108,7 +109,7 @@ class RearQqScope : RoxyHooker() {
                         before {
                             val next=args(0).value as? Configuration?:return@before
                             val display=Server.field(next,"extraConfig")?.let { Server.field(it,"mDisplayId") } as? Int?:-1
-                            rearDensityDispatch.set(active&&hookPrefs.getBoolean(ConfigKeys.REAR_APP_ENABLED,false)&&(display==1||lastAppDisplay==1))
+                            rearDensityDispatch.set(active&&hookPrefs.getBoolean(ConfigKeys.REAR_APP_ENABLED, RearAppDefaults.ENABLED)&&(display==1||lastAppDisplay==1))
                             lastAppDisplay=display
                         }
                         after { rearDensityDispatch.remove() }

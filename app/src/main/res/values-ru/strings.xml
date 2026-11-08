@@ -4,7 +4,7 @@
     <string name="mary_markdown_image_loading">Загрузка изображения...</string>
     <string name="mary_markdown_image_error">Не удалось загрузить изображение</string>
     <string name="mary_confirmation_permissions">Разрешения</string>
-    <string name="app_name">REAREye</string>
+    <string name="app_name">Seine</string>
     <string name="xposed_desc">За тобой всегда кто-то наблюдает с обратной стороны</string>
     <string name="status_card">Cтатус</string>
     <string name="subscreen_notification_access_title">Включить доступ к уведомлениям на заднем экране</string>
@@ -43,7 +43,7 @@
     <string name="navigation_quick_cancel">Отмена</string>
     <string name="configuration_title">Настройки</string>
     <string name="config_dashboard_title">Панель настроек</string>
-    <string name="config_dashboard_desc">Настройки REAREye сгруппированы по задачам, чтобы не приходилось искать нужные параметры по разным разделам</string>
+    <string name="config_dashboard_desc">Настройки Seine сгруппированы по задачам, чтобы не приходилось искать нужные параметры по разным разделам</string>
     <string name="config_dashboard_search_hint">Поиск настроек</string>
     <string name="config_dashboard_search_results">Результаты поиска</string>
     <string name="config_dashboard_search_results_count">Найдено: %1$d</string>
@@ -67,8 +67,8 @@
     <string name="config_tab_components">Компоненты</string>
     <string name="config_tab_wallpapers">Обои</string>
     <string name="config_tab_more">Ещё</string>
-    <string name="config_more_apps_runtime_title">Приложения и работа</string>
-    <string name="config_more_apps_runtime_desc">Запуск приложений, работа в фоне, блокировка экрана, границы отображения и взаимодействия</string>
+    <string name="config_more_apps_runtime_title">Фон и совместимость</string>
+    <string name="config_more_apps_runtime_desc">Фоновая работа, блокировка экрана и совместимость</string>
     <string name="config_more_notifications_route_title">Уведомления и маршрутизация</string>
     <string name="config_more_notifications_route_desc">Маршрутизация уведомлений к компонентам заднего экрана и параметры их отображения</string>
     <string name="config_more_music_lyrics_title">Музыка и тексты песен</string>
@@ -79,7 +79,7 @@
     <string name="config_more_unlock_limits_desc">Снятие лимитов на приложений, видеообои, шаблоны и системные возможности</string>
     <string name="config_more_gallery_weather_title">Галерея и погода</string>
     <string name="config_more_gallery_weather_desc">Улучшение галереи, бэкап, создание контента и эффекты погоды</string>
-    <string name="config_more_reareye_settings_title">Настройки REAREye</string>
+    <string name="config_more_reareye_settings_title">Настройки Seine</string>
     <string name="config_more_reareye_settings_desc">Интерфейс, навигация, магазин компонентов, ярлык на раб. столе и отладка</string>
     <string name="config_more_search">Поиск</string>
     <string name="config_more_search_hint">Введите название настройки</string>
@@ -110,11 +110,6 @@
     <string name="selection_clear">Очистить</string>
     <string name="config_selected_apps">Выбрано приложений: %1$d</string>
     <string name="config_slider_current_value">Текущее значение: %1$s</string>
-    <string name="config_favorites_title">Избранные настройки</string>
-    <string name="config_favorites_empty">Нажмите и удерживайте настройку, чтобы добавить её сюда</string>
-    <string name="config_favorites_count">В избранном: %1$d</string>
-    <string name="config_favorite_add">Добавить в избранное</string>
-    <string name="config_favorite_remove">Убрать из избранного</string>
     <string name="app_list_more_actions">Другие действия</string>
     <string name="app_list_sort">Сортировка</string>
     <string name="app_list_filter">Фильтр</string>
@@ -127,7 +122,7 @@
     <string name="rear_store_search_hint">Поиск компонентов…</string>
 
     <string name="category_module_settings">Настройки модуля</string>
-    <string name="category_module_settings_desc">Настройки самого модуля REAREye</string>
+    <string name="category_module_settings_desc">Настройки самого модуля Seine</string>
     <string name="module_theme_mode">Тема оформления</string>
     <string name="module_theme_mode_desc">Переключение между вариантами оформления</string>
     <string name="module_navigation_bar_mode">Стиль панели навигации</string>
@@ -155,7 +150,7 @@
     <string name="module_theme_mode_monet_light">Monet: светлая</string>
     <string name="module_theme_mode_monet_dark">Monet: тёмная</string>
     <string name="hide_launcher_entry">Скрыть значок приложения</string>
-    <string name="hide_launcher_entry_desc">Необязательно: убрать значок REAREye с рабочего стола</string>
+    <string name="hide_launcher_entry_desc">Необязательно: убрать значок Seine с рабочего стола</string>
 
     <string name="category_system">Системный фреймворк</string>
     <string name="cfg_activities_whitelist">Белый список приложений</string>
@@ -242,7 +237,7 @@
     <string name="rear_wallpaper_unavailable">Недоступные обои №%1$d</string>
     <string name="rear_wallpaper_unavailable_desc">Этих обоев больше нет в текущем списке системных обоев</string>
     <string name="rear_wallpaper_manage_title">Управление обоями</string>
-    <string name="rear_wallpaper_manage_summary">Импорт пакетов MRC и управление метаданными обоев, импортированных через REAREye</string>
+    <string name="rear_wallpaper_manage_summary">Импорт пакетов MRC и управление метаданными обоев, импортированных через Seine</string>
     <string name="rear_wallpaper_refresh">Обновить</string>
     <string name="rear_wallpaper_import">Импортировать обои</string>
     <string name="rear_wallpaper_rotation_toggle">Автосмена</string>
@@ -259,7 +254,7 @@
     <string name="rear_wallpaper_edit_interval_short">Интервал</string>
     <string name="rear_wallpaper_import_success">Обои импортированы</string>
     <string name="rear_wallpaper_import_failed">Не удалось импортировать обои: %1$s</string>
-    <string name="rear_wallpaper_imported_badge">Импортировано через REAREye</string>
+    <string name="rear_wallpaper_imported_badge">Импортировано через Seine</string>
     <string name="rear_wallpaper_edit_metadata">Изменить метаданные</string>
     <string name="rear_wallpaper_metadata_saved">Метаданные сохранены</string>
     <string name="rear_wallpaper_metadata_save_failed">Не удалось сохранить метаданные: %1$s</string>
@@ -275,7 +270,7 @@
     <string name="rear_wallpaper_package_file">Пакет MRC или ZIP</string>
     <string name="rear_wallpaper_metadata_file">Файл метаданных (.mrm, необязательно)</string>
     <string name="rear_wallpaper_no_file_selected">Файл не выбран</string>
-    <string name="rear_wallpaper_metadata_default_hint">Если файл не выбран, REAREye создаст метаданные самостоятельно</string>
+    <string name="rear_wallpaper_metadata_default_hint">Если файл не выбран, Seine создаст метаданные самостоятельно</string>
     <string name="rear_wallpaper_preview_file">Изображение для предпросмотра (необязательно)</string>
     <string name="rear_wallpaper_preview_default_hint">Если изображение не выбрано, будет использована картинка из пакета</string>
     <string name="rear_wallpaper_preview_keep_current">Оставить текущее изображение предпросмотра</string>
@@ -522,8 +517,8 @@
     <string name="home_easter_egg_enabled">Пасхалка включена: %1$s</string>
     <string name="home_easter_egg_disabled">Пасхалка отключена: %1$s</string>
     <string name="home_update_title">Обновление версии</string>
-    <string name="home_update_current">Текущий коммит</string>
-    <string name="home_update_latest">Последний коммит</string>
+    <string name="home_update_current">Установленная версия</string>
+    <string name="home_update_latest">Последний выпуск</string>
     <string name="home_update_checking">Проверка…</string>
     <string name="home_update_unknown">Неизвестно</string>
     <string name="home_update_warning_title">Доступно обновление</string>
@@ -664,14 +659,14 @@
     <string name="lyric_skip_unchanged_title_update">Игнорировать обновления метаданных, если изменилось только название песни</string>
     <string name="lyric_skip_unchanged_title_update_desc">Если Media ID не изменился, а изменилось только название трека, игнорировать обновление, чтобы Bluetooth-тексты песен не мешали модулю обработки текстов</string>
     <string name="lyric_take_over_builtin_handling">Перехватить встроенную обработку текстов песен</string>
-    <string name="lyric_take_over_builtin_handling_desc">Если включено, REAREye будет обрабатывать позицию воспроизведения и переносы строк системных текстов песен, обеспечивая работу с полноценными текстами в формате LRC</string>
+    <string name="lyric_take_over_builtin_handling_desc">Если включено, Seine будет обрабатывать позицию воспроизведения и переносы строк системных текстов песен, обеспечивая работу с полноценными текстами в формате LRC</string>
     <string name="rear_store_detail_header">Информация о компоненте</string>
     <string name="module_store_api_provider_cf">Cloudflare</string>
     <string name="home_easter_egg_huawei_ultimate_design_working">За пределами досягаемости</string>
     <string name="home_easter_egg_huawei_ultimate_design_activated">Вершина совершенства достигнута</string>
     <string name="home_easter_egg_huawei_ultimate_design">СОВЕРШЕННЫЙ ДИЗАЙН</string>
     <string name="frame_sampler_title">Используется изменённая версия</string>
-    <string name="frame_sampler_summary">Не доверяйте установочным файлам из неизвестных источников и не сообщайте о проблемах неофициальных версий как об ошибках REAREye</string>
+    <string name="frame_sampler_summary">Не доверяйте установочным файлам из неизвестных источников и не сообщайте о проблемах неофициальных версий как об ошибках Seine</string>
     <string name="developer_build">DEV</string>
     <string name="device_name">Модель устройства</string>
     <string name="os_version">Версия ОС</string>
@@ -759,7 +754,7 @@
     <string name="rear_widget_card_tab_normal">Обычные</string>
     <string name="rear_widget_card_tab_app">Приложения</string>
     <string name="rear_widget_badge_app">Приложение</string>
-    <string name="rear_widget_badge_reareye">REAREye</string>
+    <string name="rear_widget_badge_reareye">Seine</string>
     <string name="rear_widget_badge_external">Внешний</string>
     <string name="rear_widget_badge_read_only">Только чтение</string>
     <string name="rear_widget_badge_component">Компонент: %1$s</string>
@@ -817,16 +812,16 @@
     <string name="oobe_previous">Назад</string>
     <string name="oobe_next">Далее</string>
     <string name="oobe_continue">Продолжить</string>
-    <string name="oobe_welcome_title">Добро пожаловать в REAREye</string>
-    <string name="oobe_welcome_summary">REAREye позволяет управлять карточками, приложениями, компонентами и обоями на заднем экране. Сейчас вы познакомитесь с несколькими основными функциями.</string>
+    <string name="oobe_welcome_title">Добро пожаловать в Seine</string>
+    <string name="oobe_welcome_summary">Seine позволяет управлять карточками, приложениями, компонентами и обоями на заднем экране. Сейчас вы познакомитесь с несколькими основными функциями.</string>
     <string name="oobe_disclaimer_title">Перед началом</string>
     <string name="oobe_disclaimer_summary">Перед началом кратко ознакомьтесь с несколькими важными замечаниями.</string>
-    <string name="oobe_disclaimer_heading">Используйте REAREye только в доверенной среде</string>
+    <string name="oobe_disclaimer_heading">Используйте Seine только в доверенной среде</string>
     <string name="oobe_disclaimer_point_one">Root, область действия LSP и Hook могут влиять на системные компоненты.</string>
     <string name="oobe_disclaimer_point_two">Перед изменением расширенных настроек сделайте резервную копию важных данных.</string>
     <string name="oobe_disclaimer_point_three">В любой момент можно вернуться на главную страницу и проверить состояние и настройки.</string>
     <string name="oobe_permission_title">Проверка разрешений</string>
-    <string name="oobe_permission_summary">Убедитесь, что выполнены оба условия, необходимые для работы REAREye.</string>
+    <string name="oobe_permission_summary">Убедитесь, что выполнены оба условия, необходимые для работы Seine.</string>
     <string name="oobe_lsp_title">Область действия LSP</string>
     <string name="oobe_lsp_active">Область действия выбрана, целевой процесс запущен</string>
     <string name="oobe_lsp_scope_ready">Область действия выбрана, ожидание целевого процесса</string>
@@ -842,7 +837,7 @@
     <string name="guide_nav_title">Быстрые действия находятся здесь</string>
     <string name="guide_nav_summary">Отсюда можно быстро переключаться между основными страницами и открывать часто используемые разделы.</string>
     <string name="guide_config_title">Откройте панель настроек</string>
-    <string name="guide_config_summary">Здесь находится основное место для настройки REAREye. Параметры сгруппированы по категориям, а также доступен поиск.</string>
+    <string name="guide_config_summary">Здесь находится основное место для настройки Seine. Параметры сгруппированы по категориям, а также доступен поиск.</string>
     <string name="guide_cards_title">Карточки и ярлыки приложений</string>
     <string name="guide_cards_summary">Здесь можно выбрать, какие карточки и приложения будут отображаться на заднем экране.</string>
     <string name="guide_components_title">Управление компонентами</string>

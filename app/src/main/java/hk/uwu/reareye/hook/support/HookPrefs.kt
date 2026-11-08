@@ -1,8 +1,12 @@
 package hk.uwu.reareye.hook.support
 
+import hk.uwu.reareye.BuildConfig
 import android.content.SharedPreferences
 import java.io.File
 import java.io.InputStream
+
+/** Must match the permission declared by the installed module APK. */
+internal const val REAR_API_PERMISSION = BuildConfig.APPLICATION_ID + ".permission.ACCESS_REAR_WIDGET_API"
 
 /** UI 与 Hook 通过 libxposed RemotePreferences 共享的唯一逻辑组名。 */
 internal const val REMOTE_PREFS_GROUP = "hk.uwu.reareye_preferences"

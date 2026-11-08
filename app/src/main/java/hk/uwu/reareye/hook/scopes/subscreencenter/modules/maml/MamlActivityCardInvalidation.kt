@@ -1,6 +1,7 @@
 package hk.uwu.reareye.hook.scopes.subscreencenter.modules.maml
 
 import android.content.Context
+import hk.uwu.reareye.BuildConfig
 import java.io.File
 
 /** Called only after the transport verifies the module Binder UID and current user. */
@@ -25,14 +26,14 @@ object MamlActivityCardInvalidation {
                 val pkg = row.getString("packageName")
                 val name = row.getString("business")
                 require(id.isNotBlank() && pkg.isNotBlank() && name.isNotBlank())
-                if (id == cardId && pkg == "hk.uwu.reareye" && name == business) found = true
+                if (id == cardId && pkg == BuildConfig.APPLICATION_ID && name == business) found = true
             }
             found
         }.getOrNull()
 
     fun deleteDefinition(context: Context, business: String, cardId: String): Boolean {
         val identity = MamlCardScopeFiles.moduleIdentity(
-            "hk.uwu.reareye", "hk.uwu.reareye", business, cardId,
+            BuildConfig.APPLICATION_ID, BuildConfig.APPLICATION_ID, business, cardId,
         ) ?: return false
         return runCatching {
             // Retire every live root before erasing disk state. No old callback can recreate it.

@@ -2,6 +2,7 @@
 
 package hk.uwu.reareye.hook.scopes.subscreencenter.modules.rearwidget
 
+import hk.uwu.reareye.hook.support.REAR_API_PERMISSION
 import android.annotation.SuppressLint
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -47,6 +48,7 @@ import hk.uwu.reareye.repository.rearwidget.RearBusinessExtraConfigRepository.ge
 import hk.uwu.reareye.repository.rearwidget.RearWidgetConfigCodec
 import hk.uwu.reareye.repository.widgettemplate.WidgetTemplateConfigRepository
 import hk.uwu.reareye.ui.config.ConfigKeys
+import hk.uwu.reareye.ui.config.RearNotificationDefaults
 import hk.uwu.reareye.ui.config.PrefsManager.Companion.getPrefsManager
 import hk.uwu.reareye.widgetapi.IRearWidgetApiConnection
 import hk.uwu.reareye.widgetapi.IRearWidgetApiService
@@ -624,7 +626,7 @@ class RearWidgetHook : RoxyHooker() {
                 }
                 managerRef.firstMethod { name = closing.methodName; parameterCount = 1 }.hook {
                     after {
-                        if (!hookPrefs.getBoolean(ConfigKeys.REAR_NOTIFICATION_SYNC, false)) return@after
+                        if (!hookPrefs.getBoolean(ConfigKeys.REAR_NOTIFICATION_SYNC, RearNotificationDefaults.ENABLED)) return@after
                         val owner = instance ?: return@after
                         normalizeNotificationWidgetOrder(owner)
                         // Preload the native first page while hidden, so reopening
@@ -2152,7 +2154,7 @@ class RearWidgetHook : RoxyHooker() {
                 registrationContext,
                 hookBootstrapReceiver,
                 filter,
-                RearWidgetApiContract.SERVICE_PERMISSION,
+                REAR_API_PERMISSION,
                 null,
                 ContextCompat.RECEIVER_EXPORTED
             )
@@ -2402,13 +2404,13 @@ class RearWidgetHook : RoxyHooker() {
             throw SecurityException("context not ready for permission check")
         }
         val granted = ctx.checkPermission(
-            RearWidgetApiContract.SERVICE_PERMISSION,
+            REAR_API_PERMISSION,
             Binder.getCallingPid(),
             uid,
         ) == PackageManager.PERMISSION_GRANTED
         if (!granted) {
             throw SecurityException(
-                "caller uid=$uid requires ${RearWidgetApiContract.SERVICE_PERMISSION}"
+                "caller uid=$uid requires ${REAR_API_PERMISSION}"
             )
         }
     }
@@ -3196,7 +3198,7 @@ class RearWidgetHook : RoxyHooker() {
             val currentBeforeInactive = runCatching {
                 managerTarget.asResolver().firstField { name = beforeInactiveFieldName }.get<Int>()
             }.getOrNull() ?: -1
-            val preferredIndex = (if (hookPrefs.getBoolean(ConfigKeys.REAR_NOTIFICATION_SYNC, false))
+            val preferredIndex = (if (hookPrefs.getBoolean(ConfigKeys.REAR_NOTIFICATION_SYNC, RearNotificationDefaults.ENABLED))
                 list.indexOfLast { isPriorityManagedWidget(it) }
             else list.indexOfFirst { isPriorityManagedWidget(it) })
                 .takeIf { it >= 0 }
@@ -3228,7 +3230,7 @@ class RearWidgetHook : RoxyHooker() {
         // produced the forward visual order on the actual device.
         val ranks = RearNotificationCards.sourceOrder.withIndex().associate { it.value to -it.index }
         return compareBy<Any> { widget ->
-            if (!hookPrefs.getBoolean(ConfigKeys.REAR_NOTIFICATION_SYNC, false)) 0
+            if (!hookPrefs.getBoolean(ConfigKeys.REAR_NOTIFICATION_SYNC, RearNotificationDefaults.ENABLED)) 0
             else {
                 val bundle = managerWidgetBundle(widget)
                 val source = bundle?.getString("__notification_source_key__")
@@ -3244,7 +3246,7 @@ class RearWidgetHook : RoxyHooker() {
     }
 
     private fun PackageScope.normalizeNotificationWidgetOrder(target: Any?, opening: Boolean = false) {
-        if (!hookPrefs.getBoolean(ConfigKeys.REAR_NOTIFICATION_SYNC, false)) return
+        if (!hookPrefs.getBoolean(ConfigKeys.REAR_NOTIFICATION_SYNC, RearNotificationDefaults.ENABLED)) return
         val owner = target ?: return
         val list = owner.asResolver().firstField { name = resolveSmartAssistantManagerWidgetListFieldName() }
             .get<ArrayList<Any>>() ?: return

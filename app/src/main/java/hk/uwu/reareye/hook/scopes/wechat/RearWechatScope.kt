@@ -11,6 +11,7 @@ import com.highcapable.kavaref.KavaRef.Companion.resolve
 import hk.uwu.reareye.hook.support.YLog
 import hk.uwu.reareye.hook.support.hookPrefs
 import hk.uwu.reareye.ui.config.ConfigKeys
+import hk.uwu.reareye.ui.config.RearAppDefaults
 import hk.uwu.roxyhook.PackageScope
 import hk.uwu.roxyhook.RoxyHooker
 import hk.uwu.roxyhook.HotReloadPolicy
@@ -36,7 +37,7 @@ class RearWechatScope : RoxyHooker() {
                 adjusted.remove(activity)?.let { (list,amount)->if(amount>0)list.scrollListBy(-amount) }
             }
             fun update(activity: Activity) {
-                val rear=!closed&&!quiescing&&hookPrefs.getBoolean(ConfigKeys.REAR_APP_ENABLED,false)&&activity.display?.displayId==1
+                val rear=!closed&&!quiescing&&hookPrefs.getBoolean(ConfigKeys.REAR_APP_ENABLED, RearAppDefaults.ENABLED)&&activity.display?.displayId==1
                 if(!rear) { restore(activity);return }
                 val decor=activity.window.decorView
                 val barId=activity.resources.getIdentifier("ei","id","com.tencent.mm")

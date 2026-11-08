@@ -1,5 +1,6 @@
 package hk.uwu.reareye.hook.scopes.subscreencenter.modules.maml
 
+import hk.uwu.reareye.BuildConfig
 import java.io.File
 import java.security.MessageDigest
 import java.util.UUID
@@ -38,7 +39,7 @@ internal class MamlCardScopeFiles(private val directory: File) {
     }
 
     companion object {
-        private const val MODULE_PACKAGE = "hk.uwu.reareye"
+        private const val MODULE_PACKAGE = BuildConfig.APPLICATION_ID
         private val BUSINESS = Regex("[A-Za-z0-9_.-]+")
         private val CANONICAL_UUID =
             Regex("[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")

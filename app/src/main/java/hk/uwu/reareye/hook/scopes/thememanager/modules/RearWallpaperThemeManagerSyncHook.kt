@@ -193,7 +193,7 @@ class RearWallpaperThemeManagerSyncHook : RoxyHooker() {
     ): Any {
         val (item, resId, applyId, position) = record
         val json = item
-        val resType = json.optNonBlankString("resType") ?: "REAREye"
+        val resType = json.optNonBlankString("resType") ?: "Seine"
         val packagePath = json.optNonBlankString("resLocalPath")
         val metadataPath = json.optNonBlankString("metaPath")
         val previewPath = json.optNonBlankString("resPreviewPath")

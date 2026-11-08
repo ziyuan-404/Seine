@@ -20,6 +20,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.CompositionLocalProvider
@@ -39,8 +40,8 @@ import androidx.compose.ui.unit.dp
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.core.content.edit
-import com.kyant.backdrop.backdrops.layerBackdrop
-import com.kyant.backdrop.backdrops.rememberLayerBackdrop
+import ui.feice.mochi.effect.glass.mochiBackdropSource
+import ui.feice.mochi.effect.glass.rememberMochiBackdrop
 import hk.uwu.reareye.ui.components.PresetPackDialog
 import hk.uwu.reareye.ui.components.SubscreenNotificationAccessPrompt
 import hk.uwu.reareye.ui.components.TargetAppVersionDialog
@@ -51,6 +52,7 @@ import hk.uwu.reareye.ui.components.navigation.encodeNavigationQuickActionIds
 import hk.uwu.reareye.ui.components.navigation.parseNavigationQuickActionIds
 import hk.uwu.reareye.ui.config.ConfigKeys
 import hk.uwu.reareye.ui.config.ConfigType
+import hk.uwu.reareye.ui.config.ModuleMochiGraphicsLevel
 import hk.uwu.reareye.ui.config.ModuleNavigationBarMode
 import hk.uwu.reareye.ui.config.ModuleSettingsController
 import hk.uwu.reareye.ui.config.PrefsManager.Companion.getPrefsManager
@@ -58,6 +60,7 @@ import hk.uwu.reareye.ui.config.rememberRemotePrefsStatusRevision
 import hk.uwu.reareye.ui.screen.AboutScreen
 import hk.uwu.reareye.ui.screen.ConfigScreen
 import hk.uwu.reareye.ui.screen.HomeScreen
+import hk.uwu.reareye.ui.screen.SeineSponsorScreen
 import hk.uwu.reareye.ui.screen.LocalMarySidebarPageGestureHost
 import hk.uwu.reareye.ui.screen.MarySidebarPageGestureHost
 import hk.uwu.reareye.ui.screen.MarySidebarPagePreview
@@ -68,23 +71,28 @@ import hk.uwu.reareye.ui.screen.MarySettingsScreen
 import hk.uwu.reareye.ui.screen.RearStoreScreen
 import hk.uwu.reareye.ui.screen.preloadHomeFrameNotice
 import hk.uwu.reareye.ui.theme.AppTheme
+import hk.uwu.reareye.ui.theme.MochiColorSettings
 import hk.uwu.reareye.ui.theme.AppThemeMode
 import hk.uwu.reareye.version.AppVersionGate
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.theme.MiuixTheme
+import ui.feice.mochi.theme.MochiGraphics
 
 /**
  * Screen order drives the horizontal transition direction. The Rear Store is reachable from the
  * configuration header rather than the bottom bar, so it keeps a slot here for its transition
  * while [RearNavigationBar] renders only the four bottom-bar destinations.
  */
-private val MainScreenOrder = listOf("home", "store", "mary", "config", "about")
+private val MainScreenOrder = listOf("home", "support", "store", "mary", "config", "about")
 
 private data class RemoteUiSettings(
     val themeModeValue: Int,
+    val mochiGraphicsValue: Int,
+    val mochiColors: MochiColorSettings,
     val navigationBarModeValue: Int,
+    val searchBarStyleValue: Int,
     val navigationQuickActionIds: List<String>,
     val launcherHidden: Boolean,
 )
@@ -112,6 +120,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         // Keep the window edge-to-edge: Compose, not decor resizing/panning, owns IME avoidance.
         enableEdgeToEdge()
+        MochiGraphics.level = ModuleMochiGraphicsLevel.default.level
 
         try {
             val permissionInfo = applicationContext.packageManager
@@ -182,7 +191,8 @@ class MainActivity : ComponentActivity() {
             val remoteRevision = rememberRemotePrefsStatusRevision()
             var remoteUiSettings by remember { mutableStateOf<RemoteUiSettings?>(null) }
 
-            LaunchedEffect(remoteRevision) {
+            var appearanceRevision by remember { mutableIntStateOf(0) }
+            LaunchedEffect(remoteRevision, appearanceRevision) {
                 val loadedRemoteUiSettings = withContext(Dispatchers.IO) {
                     if (!remotePrefsManager.isRemoteReady()) {
                         null
@@ -212,9 +222,24 @@ class MainActivity : ComponentActivity() {
                                 ConfigKeys.MODULE_THEME_MODE,
                                 AppThemeMode.default.value,
                             ),
+                            mochiColors = MochiColorSettings(
+                                mode = remotePrefsManager.getInt(ConfigKeys.MODULE_MOCHI_COLOR_MODE, -1),
+                                palette = remotePrefsManager.getInt(ConfigKeys.MODULE_MOCHI_PALETTE_STYLE, 0),
+                                seed = if (remotePrefsManager.prefs.contains(ConfigKeys.MODULE_MOCHI_SEED_COLOR)) {
+                                    remotePrefsManager.getInt(ConfigKeys.MODULE_MOCHI_SEED_COLOR, 0)
+                                } else null,
+                            ),
+                            mochiGraphicsValue = remotePrefsManager.getInt(
+                                ConfigKeys.MODULE_MOCHI_GRAPHICS_LEVEL,
+                                ModuleMochiGraphicsLevel.default.value,
+                            ),
                             navigationBarModeValue = remotePrefsManager.getInt(
                                 ConfigKeys.MODULE_NAVIGATION_BAR_MODE,
                                 ModuleNavigationBarMode.default.value,
+                            ),
+                            searchBarStyleValue = remotePrefsManager.getInt(
+                                ConfigKeys.MODULE_SEARCH_BAR_STYLE,
+                                hk.uwu.reareye.ui.config.ModuleSearchBarStyle.default.value,
                             ),
                             navigationQuickActionIds = normalizedQuickActionIds,
                             launcherHidden = remotePrefsManager.getBoolean(
@@ -225,8 +250,9 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
-                remoteUiSettings = loadedRemoteUiSettings
                 loadedRemoteUiSettings?.let { settings ->
+                    MochiGraphics.level = ModuleMochiGraphicsLevel.fromValue(settings.mochiGraphicsValue).level
+                    remoteUiSettings = settings
                     ModuleSettingsController.syncLauncherEntryVisibility(
                         context = applicationContext,
                         hidden = settings.launcherHidden,
@@ -240,12 +266,6 @@ class MainActivity : ComponentActivity() {
                 return@setContent
             }
 
-            var themeModeValue by remember {
-                mutableIntStateOf(settings.themeModeValue)
-            }
-            var navigationBarModeValue by remember {
-                mutableIntStateOf(settings.navigationBarModeValue)
-            }
             var currentScreen by remember { mutableStateOf("home") }
             // The Rear Store is a configuration-level destination, so the system back gesture
             // returns to Configuration instead of finishing the activity. Deeper store routes
@@ -253,8 +273,8 @@ class MainActivity : ComponentActivity() {
             BackHandler(enabled = currentScreen == "store") {
                 currentScreen = "config"
             }
+            BackHandler(enabled = currentScreen == "support") { currentScreen = "home" }
             var showPresetPackDialog by remember { mutableStateOf(false) }
-            var presetPackRefreshToken by remember { mutableIntStateOf(0) }
             var navBarVisible by remember { mutableStateOf(false) }
             var configInAppListMode by remember { mutableStateOf(false) }
             var pendingConfigQuickManagerTarget by remember {
@@ -290,22 +310,34 @@ class MainActivity : ComponentActivity() {
                 navBarVisible = true
             }
 
-            AppTheme(themeMode = AppThemeMode.fromValue(themeModeValue)) {
-                val navigationBarMode = ModuleNavigationBarMode.fromValue(navigationBarModeValue)
-                val enableFloatingGlass =
-                    navigationBarMode == ModuleNavigationBarMode.FLOATING_GLASS
+            AppTheme(
+                themeMode = AppThemeMode.fromValue(settings.themeModeValue),
+                colorSettings = settings.mochiColors,
+            ) {
+                val navigationBarMode = ModuleNavigationBarMode.fromValue(settings.navigationBarModeValue)
+                val glassNavigation = navigationBarMode == ModuleNavigationBarMode.FLOATING_GLASS ||
+                    navigationBarMode == ModuleNavigationBarMode.SEMI_TRANSPARENT
                 val showNavigation =
-                    navBarVisible && !(currentScreen == "config" && configInAppListMode)
+                    navBarVisible && currentScreen != "support" && !(currentScreen == "config" && configInAppListMode)
                 val density = LocalDensity.current
                 val surfaceColor = MiuixTheme.colorScheme.surface
-                val backdrop = rememberLayerBackdrop {
-                    drawRect(surfaceColor)
-                    drawContent()
-                }
+                val backdrop = if (glassNavigation) rememberMochiBackdrop(surfaceColor) else null
                 var stableBottomInset by remember { mutableStateOf(0.dp) }
                 val marySidebarGestureHost = remember { MarySidebarPageGestureHost() }
+                val launchReveal = remember { androidx.compose.animation.core.Animatable(0f) }
+                LaunchedEffect(Unit) {
+                    launchReveal.animateTo(
+                        1f,
+                        androidx.compose.animation.core.tween(
+                            420,
+                            easing = androidx.compose.animation.core.FastOutSlowInEasing,
+                        ),
+                    )
+                }
 
                 CompositionLocalProvider(
+                    hk.uwu.reareye.ui.components.LocalRearSearchBarStyle provides
+                        hk.uwu.reareye.ui.config.ModuleSearchBarStyle.fromValue(settings.searchBarStyleValue),
                     LocalFeatureGuideAnchors provides guideAnchors.takeIf { featureGuideVisible },
                     LocalMarySidebarPageGestureHost provides marySidebarGestureHost,
                 ) {
@@ -314,6 +346,11 @@ class MainActivity : ComponentActivity() {
                         Box(
                             modifier = Modifier
                                 .fillMaxSize()
+                                .background(surfaceColor)
+                                .graphicsLayer {
+                                    alpha = launchReveal.value
+                                    translationY = 14.dp.toPx() * (1f - launchReveal.value)
+                                }
                                 .marySidebarPageGesture(marySidebarGestureHost,
                                     enabled = currentScreen == "mary" && !showPresetPackDialog && !featureGuideVisible)
                                 // Navigation stays at the physical window bottom. Screens own
@@ -324,13 +361,7 @@ class MainActivity : ComponentActivity() {
                                 modifier = Modifier
                                     .fillMaxSize()
                                     .marySidebarBackground(marySidebarGestureHost)
-                                    .then(
-                                        if (enableFloatingGlass) {
-                                            Modifier.layerBackdrop(backdrop)
-                                        } else {
-                                            Modifier
-                                        }
-                                    )
+                                    .mochiBackdropSource(backdrop)
                             ) {
                                 AnimatedContent(
                                     targetState = currentScreen,
@@ -385,10 +416,7 @@ class MainActivity : ComponentActivity() {
                                         "home" -> Box(modifier = Modifier.fillMaxSize()) {
                                             HomeScreen(
                                                 bottomInnerPadding = stableBottomInset,
-                                                onOpenPresetPackDialog = {
-                                                    showPresetPackDialog = true
-                                                },
-                                                presetPackRefreshToken = presetPackRefreshToken,
+                                                onOpenSponsor = { currentScreen = "support" },
                                             )
                                         }
 
@@ -441,6 +469,7 @@ class MainActivity : ComponentActivity() {
                                                     },
                                                 )
                                             } else ConfigScreen(
+                                                onOpenPresetPackDialog = { showPresetPackDialog = true },
                                                 bottomInnerPadding = stableBottomInset,
                                                 quickManagerTarget = pendingConfigQuickManagerTarget,
                                                 onQuickManagerTargetHandled = {
@@ -449,10 +478,7 @@ class MainActivity : ComponentActivity() {
                                                 onAppListModeChange = {
                                                     configInAppListMode = it
                                                 },
-                                                onThemeModeChange = { themeModeValue = it },
-                                                onNavigationBarModeChange = {
-                                                    navigationBarModeValue = it
-                                                },
+                                                onAppearanceChanged = { appearanceRevision++ },
                                                 onOpenRearStore = {
                                                     configInAppListMode = false
                                                     currentScreen = "store"
@@ -465,12 +491,9 @@ class MainActivity : ComponentActivity() {
                                             )
                                         }
 
-                                        "about" -> AboutScreen(
-                                            bottomInnerPadding = stableBottomInset,
-                                            onOpenPresetPackDialog = {
-                                                showPresetPackDialog = true
-                                            },
-                                        )
+                                        "support" -> SeineSponsorScreen(onBack = { currentScreen = "home" })
+
+                                        "about" -> AboutScreen(bottomInnerPadding = stableBottomInset)
                                     }
                                 }
                             }
@@ -523,7 +546,6 @@ class MainActivity : ComponentActivity() {
                                             currentScreen = if (currentScreen == "store") "config" else currentScreen,
                                             navigationBarMode = navigationBarMode,
                                             backdrop = backdrop,
-                                            shadowVisibilityProgress = navShadowProgress,
                                             quickActionIds = navigationQuickActionIds,
                                             onQuickActionIdsChanged = { nextIds ->
                                                 val normalizedIds = parseNavigationQuickActionIds(
@@ -570,7 +592,6 @@ class MainActivity : ComponentActivity() {
                             PresetPackDialog(
                                 show = showPresetPackDialog,
                                 onDismissRequest = { showPresetPackDialog = false },
-                                onApplied = { presetPackRefreshToken++ },
                             )
 
                             if (featureGuideVisible && guideStep.action !in setOf(

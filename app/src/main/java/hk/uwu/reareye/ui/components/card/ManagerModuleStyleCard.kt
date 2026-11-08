@@ -1,11 +1,12 @@
 package hk.uwu.reareye.ui.components.card
 
 import android.annotation.SuppressLint
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -14,6 +15,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -24,13 +26,19 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import hk.uwu.reareye.ui.components.RearBadgeGroup
 import hk.uwu.reareye.ui.components.RearBadgeItem
-import top.yukonga.miuix.kmp.basic.Card
-import top.yukonga.miuix.kmp.basic.CardDefaults
 import top.yukonga.miuix.kmp.basic.HorizontalDivider
 import top.yukonga.miuix.kmp.basic.Icon
-import top.yukonga.miuix.kmp.basic.IconButton
+import ui.feice.mochi.basic.MochiButton
+import ui.feice.mochi.basic.MochiButtonDefaults
+import ui.feice.mochi.basic.MochiButtonStyle
+import ui.feice.mochi.basic.MochiIconButton
+import ui.feice.mochi.shape.MochiRoundedRectangle
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.theme.MiuixTheme
+import ui.feice.mochi.list.MochiListCard
+import ui.feice.mochi.list.MochiListDefaults
+import ui.feice.mochi.theme.MochiDefaults
+import ui.feice.mochi.theme.MochiTheme
 
 @Composable
 fun ModuleStyleManagerCard(
@@ -46,9 +54,9 @@ fun ModuleStyleManagerCard(
     scrollActionsHorizontally: Boolean = false,
     backgroundColor: Color? = null,
     contentColor: Color? = null,
-    titleColor: Color = contentColor ?: MiuixTheme.colorScheme.onSurface,
-    summaryColor: Color = contentColor ?: MiuixTheme.colorScheme.onSurfaceVariantSummary,
-    dividerColor: Color = MiuixTheme.colorScheme.outline.copy(alpha = 0.5f),
+    titleColor: Color = contentColor ?: MochiTheme.colorScheme.onSurface,
+    summaryColor: Color = contentColor ?: MochiTheme.colorScheme.onSurfaceVariant,
+    dividerColor: Color = MochiTheme.colorScheme.outlineVariant,
     onCardClick: (() -> Unit)? = null,
     leftAction: @Composable () -> Unit,
     rightAction: @Composable () -> Unit,
@@ -73,8 +81,7 @@ fun ModuleStyleManagerCard(
                 ) {
                     Text(
                         text = title,
-                        fontSize = 17.sp,
-                        fontWeight = FontWeight(550),
+                        style = MochiTheme.textStyles.titleMedium,
                         color = titleColor,
                     )
                     if (!detailsBelowHeader) {
@@ -135,50 +142,27 @@ fun ModuleStyleManagerCard(
         }
     }
 
-    if (onCardClick != null) {
-        Card(
-            modifier = cardModifier,
-            insideMargin = PaddingValues(16.dp),
-            colors = backgroundColor?.let {
-                CardDefaults.defaultColors(
-                    color = it,
-                    contentColor = contentColor ?: MiuixTheme.colorScheme.onSurface,
-                )
-            } ?: CardDefaults.defaultColors(),
-            onClick = onCardClick,
+    MochiListCard(
+        modifier = cardModifier.fillMaxWidth().then(
+            if (onCardClick != null) Modifier.clip(MochiRoundedRectangle(MochiListDefaults.SectionCorner)) else Modifier,
+        ),
+        colors = MochiListDefaults.colors(container = backgroundColor ?: MochiDefaults.groupedContainer()),
+        showDividers = false,
+        animateHeight = false,
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .then(if (onCardClick != null) Modifier.clickable(onClick = onCardClick) else Modifier)
+                .padding(16.dp),
         ) {
             headerContent()
-
             if (showActions) {
                 HorizontalDivider(
                     modifier = Modifier.padding(vertical = 8.dp),
                     thickness = 0.5.dp,
                     color = dividerColor,
                 )
-
-                actionsContent()
-            }
-        }
-    } else {
-        Card(
-            modifier = cardModifier,
-            insideMargin = PaddingValues(16.dp),
-            colors = backgroundColor?.let {
-                CardDefaults.defaultColors(
-                    color = it,
-                    contentColor = contentColor ?: MiuixTheme.colorScheme.onSurface,
-                )
-            } ?: CardDefaults.defaultColors(),
-        ) {
-            headerContent()
-
-            if (showActions) {
-                HorizontalDivider(
-                    modifier = Modifier.padding(vertical = 8.dp),
-                    thickness = 0.5.dp,
-                    color = dividerColor,
-                )
-
                 actionsContent()
             }
         }
@@ -198,11 +182,10 @@ fun ModuleStyleIconAction(
     val actionIconAlpha = if (backgroundColor.luminance() < 0.5f) 0.7f else 0.9f
     val actionIconTint =
         (contentColor ?: MiuixTheme.colorScheme.onSurface).copy(alpha = actionIconAlpha)
-    IconButton(
-        minHeight = 35.dp,
-        minWidth = 35.dp,
+    MochiIconButton(
+        size = 36.dp,
         onClick = onClick,
-        backgroundColor = backgroundColor,
+        colors = MochiButtonDefaults.colors(MochiButtonStyle.Tonal).copy(container = backgroundColor),
     ) {
         Icon(
             imageVector = icon,
@@ -226,12 +209,14 @@ fun ModuleStyleTextAction(
     val actionIconAlpha = if (backgroundColor.luminance() < 0.5f) 0.7f else 0.9f
     val actionIconTint =
         contentColor.copy(alpha = actionIconAlpha * if (enabled) 1f else 0.45f)
-    IconButton(
+    MochiButton(
         modifier = modifier,
-        minHeight = 35.dp,
-        minWidth = 35.dp,
-        onClick = if (enabled) onClick else ({}),
-        backgroundColor = backgroundColor.copy(alpha = if (enabled) backgroundColor.alpha else 0.45f),
+        minHeight = 36.dp,
+        onClick = onClick,
+        enabled = enabled,
+        style = MochiButtonStyle.Tonal,
+        contentPadding = PaddingValues(horizontal = 2.dp, vertical = 4.dp),
+        colors = MochiButtonDefaults.colors(MochiButtonStyle.Tonal).copy(container = backgroundColor),
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 10.dp),

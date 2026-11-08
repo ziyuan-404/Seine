@@ -71,7 +71,7 @@ internal object LuaLanguageSupport {
         }
         val language = MonarchLanguage(grammar, configuration, registry, true)
         // Monarch's built-in identifier completer is incremental and runs off the
-        // editor thread. Keep the vocabulary here focused on Lua and REAREye APIs;
+        // editor thread. Keep the vocabulary here focused on Lua and Seine APIs;
         // project identifiers are learned automatically from the current document.
         language.setCompleterKeywords(
             arrayOf(
@@ -131,7 +131,7 @@ internal object LuaLanguageSupport {
     }
 
     private val REAREYE_THEME = """
-        {"name":"REAREye","type":"dark","colors":{"editor.foreground":"#D4D4D4","editor.background":"#1E1E1E"},"tokenColors":[
+        {"name":"Seine","type":"dark","colors":{"editor.foreground":"#D4D4D4","editor.background":"#1E1E1E"},"tokenColors":[
           {"settings":{"foreground":"#D4D4D4"}},
           {"scope":["comment","comment.lua"],"settings":{"foreground":"#6A9955","fontStyle":"italic"}},
           {"scope":["string","string.lua","string.escape.lua"],"settings":{"foreground":"#CE9178"}},

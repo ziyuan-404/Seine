@@ -4,6 +4,7 @@ import android.content.res.Configuration
 import android.content.pm.ActivityInfo
 import android.graphics.Rect
 import android.hardware.display.DisplayManager
+import hk.uwu.reareye.BuildConfig
 import org.json.JSONArray
 import android.os.Binder
 import android.os.Handler
@@ -63,9 +64,9 @@ class RearAppDensityHook : RoxyHooker() {
                         context.packageManager.getApplicationInfo(pkg,0).uid
                     }.getOrDefault(-1)
                     if(!prefs.isRemoteReady())null else Settings(
-                        prefs.getBoolean(ConfigKeys.REAR_APP_ENABLED,false),prefs.getInt(ConfigKeys.REAR_APP_DPI,RearAppDefaults.APP_DPI),
-                        prefs.getBoolean(ConfigKeys.REAR_APP_KEYBOARD,true),prefs.getString(ConfigKeys.REAR_APP_REGION,RearAppDefaults.REGION),
-                        prefs.getStringSet(ConfigKeys.ACTIVITIES_WHITELIST_APPS).toSet(),imeUid,
+                        prefs.getBoolean(ConfigKeys.REAR_APP_ENABLED, RearAppDefaults.ENABLED),prefs.getInt(ConfigKeys.REAR_APP_DPI,RearAppDefaults.APP_DPI),
+                        RearAppDefaults.KEYBOARD,prefs.getString(ConfigKeys.REAR_APP_REGION,RearAppDefaults.REGION),
+                        prefs.getStringSet(ConfigKeys.ACTIVITIES_WHITELIST_APPS, RearAppDefaults.ALLOWED_APPS).toSet(),imeUid,
                         prefs.getBoolean(ConfigKeys.REAR_APP_ROUNDED,true),
                         prefs.getFloat(ConfigKeys.REAR_APP_CORNER_RADIUS,RearAppDefaults.CORNER_RADIUS))
                 } finally { Binder.restoreCallingIdentity(identity) }
@@ -203,16 +204,109 @@ class RearAppDensityHook : RoxyHooker() {
                 task.javaClass.getMethod("setBounds",Rect::class.java).invoke(task,null)
             }
             val taskClass="com.android.server.wm.Task".toClass()
+            val sscUid by lazy { hookSystemContext.packageManager.getApplicationInfo("com.xiaomi.subscreencenter", 0).uid }
+            // Keep Xiaomi's edge recognizer and its legacy key route. Apps with
+            // a registered Back callback need the callback of the rear window,
+            // even while the primary display owns global input focus.
+            runCatching {
+                val services = "android.os.ServiceManager".toClass()
+                val callbackType = "android.window.IOnBackInvokedCallback".toClass()
+                val motionType = "android.window.BackMotionEvent".toClass()
+                val backMotion = motionType.getConstructor(
+                    Float::class.javaPrimitiveType, Float::class.javaPrimitiveType, Long::class.javaPrimitiveType,
+                    Float::class.javaPrimitiveType, Boolean::class.javaPrimitiveType, Int::class.javaPrimitiveType,
+                )
+                val startBack = callbackType.getMethod("onBackStarted", motionType)
+                val invokeBack = callbackType.getMethod("onBackInvoked")
+                val windowService = services.getMethod("getService", String::class.java)
+                val pendingBack = java.util.concurrent.ConcurrentHashMap<Long, android.os.IInterface>()
+                var backReceipts = 8
+                fun focusedRearBack(): Pair<android.os.IInterface, Boolean>? {
+                    val windowManager = windowService.invoke(null, "window") ?: return null
+                    val lock = Server.field(windowManager, "mGlobalLock") ?: return null
+                    val root = Server.field(windowManager, "mRoot") ?: return null
+                    val displayLookup = root.javaClass.getDeclaredMethod("getDisplayContent", Int::class.javaPrimitiveType)
+                        .apply { isAccessible = true }
+                    return synchronized(lock) {
+                        val display = displayLookup.invoke(root, 1) ?: return@synchronized null
+                        val window = Server.field(display, "mCurrentFocus")
+                            ?: Server.call(display, "findFocusedWindow")
+                            ?: Server.call(display, "topRunningActivity")?.let { Server.call(it, "findMainWindow") }
+                            ?: return@synchronized null
+                        val activity = Server.field(window, "mActivityRecord") ?: return@synchronized null
+                        val task = Server.task(activity) ?: return@synchronized null
+                        if (Server.displayId(task) != 1 || Server.call(task, "getWindowingMode") != 5 ||
+                            !synchronized(tasks) { task in tasks } || task in minimizingTasks ||
+                            Server.call(task, "isVisibleRequested") != true) return@synchronized null
+                        val info = Server.call(window, "getOnBackInvokedCallbackInfo") ?: return@synchronized null
+                        val callback = Server.call(info, "getCallback") as? android.os.IInterface ?: return@synchronized null
+                        callback to (Server.call(info, "isAnimationCallback") == true)
+                    }
+                }
+                "com.android.server.input.InputManagerService".toClass().resolve().firstMethod {
+                    // InputManagerGlobal calls this Binder method directly on
+                    // this ROM, bypassing the two-argument service wrapper.
+                    name = "injectInputEventToTarget"
+                    parameters(android.view.InputEvent::class.java, Int::class.javaPrimitiveType!!, Int::class.javaPrimitiveType!!)
+                }.hook {
+                    hotReloadPolicy = HotReloadPolicy.REINSTALL
+                    before {
+                        if (!active || !settings.get().enabled) return@before
+                        val event = args(0).value as? android.view.KeyEvent ?: return@before
+                        if (event.keyCode != android.view.KeyEvent.KEYCODE_BACK ||
+                            Server.call(event, "getDisplayId") != 1 ||
+                            event.flags and android.view.KeyEvent.FLAG_FROM_SYSTEM == 0 || args(2).int() != -1 ||
+                            Binder.getCallingUid() != runCatching { sscUid }.getOrDefault(-1)) return@before
+                        val target = runCatching { focusedRearBack() }
+                            .onFailure { YLog.warn("Rear window Back target unavailable", it) }.getOrNull()
+                        val callback = target?.first
+                        when (event.action) {
+                            android.view.KeyEvent.ACTION_DOWN -> if (callback != null) {
+                                pendingBack.clear()
+                                pendingBack[event.downTime] = callback
+                                result = true
+                            }
+                            android.view.KeyEvent.ACTION_UP -> {
+                                val pressed = pendingBack.remove(event.downTime) ?: return@before
+                                result = true
+                                if (callback != null && !event.isCanceled &&
+                                    pressed.asBinder() == callback.asBinder()) {
+                                    runCatching {
+                                        if (target.second) {
+                                            val display = hookSystemContext.getSystemService(DisplayManager::class.java)
+                                                .getDisplay(1) ?: return@runCatching
+                                            val size = android.graphics.Point()
+                                            @Suppress("DEPRECATION")
+                                            display.getRealSize(size)
+                                            // Xiaomi emits the key pair after its right-edge gesture commits.
+                                            // The framework ignores animation callbacks without a start event.
+                                            val motion = backMotion.newInstance(
+                                                size.x.toFloat(), size.y / 2f, event.eventTime, 0f, true,
+                                                android.window.BackEvent.EDGE_RIGHT,
+                                            )
+                                            startBack.invoke(callback, motion)
+                                        }
+                                        invokeBack.invoke(callback)
+                                        if (backReceipts-- > 0) YLog.info("Native Back callback delivered on rear display")
+                                    }
+                                        .onFailure { YLog.warn("Rear window Back callback failed", it) }
+                                }
+                            }
+                        }
+                    }
+                }
+                YLog.info("Native rear window Back callback route installed")
+            }.onFailure { YLog.warn("Rear window Back callback route unavailable", it) }
             val moveTaskToBack=taskClass.getDeclaredMethod("moveTaskToBack",taskClass).apply { isAccessible=true }
-            fun parkRearTasks(exceptPackage:String?=null) {
+            fun parkRearTasks(exceptPackage:String?=null): List<Int> {
                 val candidates=synchronized(tasks) { tasks.toList() }.filter { task ->
                     Server.displayId(task)==1&&Server.call(task,"isActivityTypeHome")!=true&&
                         Server.call(task,"isVisibleRequested")==true&&
                         Server.call(task,"getTopMostActivity")?.let { Server.component(it)?.substringBefore('/')!=exceptPackage }==true
                 }
-                candidates.forEach { task ->
+                return candidates.mapNotNull { task ->
                     val identity=Binder.clearCallingIdentity()
-                    try { moveTaskToBack.invoke(task,task) }
+                    try { (Server.field(task, "mTaskId") as? Int)?.takeIf { moveTaskToBack.invoke(task, task) == true } }
                     finally { Binder.restoreCallingIdentity(identity) }
                 }
             }
@@ -231,8 +325,16 @@ class RearAppDensityHook : RoxyHooker() {
                     synchronized(lock) {
                         val task=root.javaClass.getDeclaredMethod("anyTaskForId",Int::class.javaPrimitiveType)
                             .apply { isAccessible=true }.invoke(root,args(0).int())?:return@synchronized
-                        if(Server.displayId(task)==1&&(Server.call(task,"isActivityTypeHome")==true||
-                                Server.call(task,"getTopMostActivity")?.let { Server.component(it)?.startsWith("com.xiaomi.subscreencenter/") }==true))parkRearTasks()
+                        if (Server.displayId(task) != 1 || !(Server.call(task, "isActivityTypeHome") == true ||
+                            Server.call(task, "getTopMostActivity")?.let { Server.component(it)?.startsWith("com.xiaomi.subscreencenter/") } == true)) return@synchronized
+                        val parked = parkRearTasks()
+                        val source = (args(1).value as? android.os.Bundle)?.getInt("hk.uwu.reareye.REAR_PICKER_SOURCE_TASK", -1) ?: -1
+                        if (source >= 0 && parked.singleOrNull() == source &&
+                            Binder.getCallingUid() == runCatching { sscUid }.getOrDefault(-1)) {
+                            // The picker was already directly behind this app.
+                            // Its native move-to-back transition reveals it.
+                            result = 2 // ActivityManager.START_TASK_TO_FRONT
+                        }
                     }
                 }
             }
@@ -255,7 +357,12 @@ class RearAppDensityHook : RoxyHooker() {
                 // overrides change the radius; do not replace native rounding.
                 if(radius!=null)transaction.javaClass.getMethod("setCornerRadius",surfaceClass,Float::class.javaPrimitiveType).invoke(transaction,surface,radius)
             }
-            "com.android.server.wm.WindowContainer".toClass().resolve().firstMethod { name="prepareSurfaces";parameterCount=0 }.hook {
+            val windowContainer = "com.android.server.wm.WindowContainer".toClass()
+            val inTransition = runCatching {
+                "com.android.server.wm.TransitionController".toClass()
+                    .getDeclaredMethod("inTransition", windowContainer).apply { isAccessible = true }
+            }.getOrNull()
+            windowContainer.resolve().firstMethod { name="prepareSurfaces";parameterCount=0 }.hook {
                 hotReloadPolicy=HotReloadPolicy.REINSTALL
                 before {
                     val task=instance?:return@before
@@ -263,6 +370,10 @@ class RearAppDensityHook : RoxyHooker() {
                     val config=settings.get()
                     if(config.rounded&&config.radius<=0f&&clippedTasks.isEmpty())return@before
                     if(active&&config.enabled&&Server.displayId(task)==1&&synchronized(tasks) { task in tasks }&&Server.call(task,"isActivityTypeHome")!=true) {
+                        // Shell and WMS share the task surface. While Shell
+                        // animates it, leave crop and radius to its transaction.
+                        val controller = Server.field(task, "mTransitionController")
+                        if (controller != null && inTransition?.invoke(controller, task) == true) return@before
                         val record=Server.call(task,"getTopMostActivity")?:return@before
                         val bounds=Server.call(record,"getBounds") as? Rect?:return@before
                         val parent=Server.call(task,"getBounds") as? Rect?:return@before
@@ -307,10 +418,12 @@ class RearAppDensityHook : RoxyHooker() {
                         .invoke(target,if(mode==5)5 else 1)
                     android.app.ActivityOptions::class.java.getDeclaredMethod("setLaunchTaskId",Int::class.javaPrimitiveType)
                         .invoke(target,Server.field(existing,"mTaskId") as Int)
-                    if(mode!=5) {
-                        restoreMainTask(existing)
+                    // The task still belongs to the rear display here. Let the
+                    // native launch move it before restoring front geometry.
+                    if (Server.displayId(existing) == 0) {
+                        if (mode != 5) restoreMainTask(existing)
+                        rearTaskIds.remove(Server.field(existing, "mTaskId"))
                     }
-                    rearTaskIds.remove(Server.field(existing,"mTaskId"))
                     args(1).value=target
                 }
             }
@@ -329,87 +442,12 @@ class RearAppDensityHook : RoxyHooker() {
             val setFitTypes=android.view.WindowManager.LayoutParams::class.java.getMethod("setFitInsetsTypes",Int::class.javaPrimitiveType)
             val insetParentByIme=0x40000000
             val nativeImeAvoidance=Collections.synchronizedMap(WeakHashMap<Any,Boolean>())
-            val blurredWindows=Collections.synchronizedMap(WeakHashMap<android.view.WindowManager.LayoutParams,Pair<Boolean,Int>>())
-            val blurRadius by lazy { runCatching {
-                val display=hookSystemContext.getSystemService(DisplayManager::class.java).getDisplay(1)
-                val resources=hookSystemContext.createPackageContext("com.xiaomi.subscreencenter",0).createDisplayContext(display).resources
-                resources.getDimensionPixelSize(resources.getIdentifier("notification_panel_blur_radius","dimen","com.xiaomi.subscreencenter"))
-            }.getOrDefault(0) }
-            fun rearBlurWindow(window:Any):Boolean {
-                val attrs=Server.field(window,"mAttrs") as? android.view.WindowManager.LayoutParams?:return false
-                return active&&settings.get().enabled&&Server.displayId(window)==1&&blurredWindows.containsKey(attrs)
-            }
-            fun restoreAppBlur(attrs:android.view.WindowManager.LayoutParams) {
-                blurredWindows.remove(attrs)?.let { (original,radius) ->
-                    if(!original)attrs.flags=attrs.flags and android.view.WindowManager.LayoutParams.FLAG_BLUR_BEHIND.inv()
-                    attrs.setBlurBehindRadius(radius)
-                }
-            }
             taskClass.resolve().firstMethod { name="moveTaskToBack";parameters(taskClass) }.hook {
                 hotReloadPolicy=HotReloadPolicy.REINSTALL
                 before {
                     val task=args(0).value?:return@before
                     if(!active||Server.displayId(task)!=1||!synchronized(tasks) { task in tasks })return@before
                     minimizingTasks.add(task)
-                    // Withdraw our blur request at native minimize start, rather than
-                    // keeping it until the closing app surface is finally destroyed.
-                    val visit=java.util.function.Consumer<Any> { window ->
-                        (Server.field(window,"mAttrs") as? android.view.WindowManager.LayoutParams)?.let(::restoreAppBlur)
-                    }
-                    generateSequence<Class<*>>(task.javaClass) { it.superclass }.flatMap { it.declaredMethods.asSequence() }
-                        .first { it.name=="forAllWindows"&&it.parameterCount==2&&it.parameterTypes[0]==java.util.function.Consumer::class.java }
-                        .apply { isAccessible=true }.invoke(task,visit,true)
-                }
-            }
-            "com.android.server.wm.Dimmer".toClass().declaredMethods.filter { it.name=="adjustAppearance"&&it.parameterCount in 3..4 }.forEach { method ->
-                "com.android.server.wm.Dimmer".toClass().resolve().firstMethod { name=method.name;parameters(*method.parameterTypes) }.hook {
-                    hotReloadPolicy=HotReloadPolicy.REINSTALL
-                    before {
-                        val window=args(0).value?:return@before
-                        if(Server.displayId(window)!=1)return@before
-                        val task=Server.field(window,"mActivityRecord")?.let(Server::task)?:return@before
-                        if(task in minimizingTasks)args(2).value=0
-                    }
-                }
-            }
-            // Retain the window manager's native blur animation and lifecycle. Put
-            // its existing backdrop in the rear display area so camera avoidance
-            // clips the app, while the backdrop still covers the whole background.
-            "com.android.server.wm.Dimmer".toClass().resolve().firstMethod { name="adjustPosition";parameterCount=2 }.hook {
-                hotReloadPolicy=HotReloadPolicy.REINSTALL
-                before {
-                    val window=args(1).value?:return@before
-                    if(!rearBlurWindow(window))return@before
-                    val display=Server.call(window,"getDisplayContent")?:return@before
-                    Server.call(display,"getDefaultTaskDisplayArea")?.let { args(0).value=it }
-                }
-            }
-            "com.android.server.wm.DimmerAnimationHelper".toClass().resolve().firstMethod { name="applyChanges";parameterCount=2 }.hook {
-                hotReloadPolicy=HotReloadPolicy.REINSTALL
-                before {
-                    val dim=args(1).value?:return@before
-                    val window=Server.field(dim,"mLastDimmingWindow")?:return@before
-                    if(!rearBlurWindow(window))return@before
-                    val display=Server.call(window,"getDisplayContent")?:return@before
-                    val area=Server.call(display,"getDefaultTaskDisplayArea")?:return@before
-                    dim.javaClass.getDeclaredMethod("prepareReparent","com.android.server.wm.WindowContainer".toClass(),window.javaClass)
-                        .apply { isAccessible=true }.invoke(dim,area,window)
-                }
-            }
-            "com.android.server.wm.DimmerAnimationHelper".toClass().resolve().firstMethod { name="setBounds";parameterCount=3 }.hook {
-                hotReloadPolicy=HotReloadPolicy.REINSTALL
-                after {
-                    val window=args(1).value?:return@after
-                    if(!rearBlurWindow(window))return@after
-                    val dim=args(0).value?:return@after
-                    val surface=Server.field(dim,"mDimSurface")?:return@after
-                    if(Server.call(surface,"isValid")!=true)return@after
-                    val area=Server.call(window,"getDisplayContent")?.let { Server.call(it,"getBounds") } as? Rect?:return@after
-                    (Server.field(dim,"mDimBounds") as? Rect)?.set(area)
-                    val transaction=args(2).value?:return@after
-                    transaction.javaClass.getMethod("setCrop",surface.javaClass,Rect::class.java).invoke(transaction,surface,area)
-                    transaction.javaClass.getMethod("setPosition",surface.javaClass,Float::class.javaPrimitiveType,Float::class.javaPrimitiveType)
-                        .invoke(transaction,surface,0f,0f)
                 }
             }
             "com.android.server.wm.WindowToken".toClass().resolve().firstMethod {
@@ -522,10 +560,6 @@ class RearAppDensityHook : RoxyHooker() {
                             if(!original)privateFlags.setInt(attrs,privateFlags.getInt(attrs) and insetParentByIme.inv())
                         }
                         appBarInsets.remove(attrs)?.let { setFitTypes.invoke(attrs,it) }
-                        blurredWindows.remove(attrs)?.let { (original,radius) ->
-                            if(!original)attrs.flags=attrs.flags and android.view.WindowManager.LayoutParams.FLAG_BLUR_BEHIND.inv()
-                            attrs.setBlurBehindRadius(radius)
-                        }
                         Server.field(window,"mActivityRecord")?.let { Server.task(it) }?.let { nativeFreeform(it) }?.let { stack ->
                             nativeImeAvoidance.remove(stack)?.let { original ->
                                 stack.javaClass.getDeclaredField("mNeedAvoidFrameForIme").apply { isAccessible=true }.setBoolean(stack,original)
@@ -537,21 +571,10 @@ class RearAppDensityHook : RoxyHooker() {
                         val record=Server.field(window,"mActivityRecord")?:return@before
                         val info=Server.field(record,"info") as? ActivityInfo?:return@before
                         val adjust=attrs.softInputMode and android.view.WindowManager.LayoutParams.SOFT_INPUT_MASK_ADJUST
-                        if(info.applicationInfo.uid%100000>=10000&&info.packageName !in setOf("com.xiaomi.subscreencenter","com.android.systemui","hk.uwu.reareye")) {
+                        if(info.applicationInfo.uid%100000>=10000&&info.packageName !in setOf("com.xiaomi.subscreencenter","com.android.systemui",BuildConfig.APPLICATION_ID)) {
                             val fit=getFitTypes.invoke(attrs) as Int
                             if(!appBarInsets.containsKey(attrs))appBarInsets[attrs]=fit
                             setFitTypes.invoke(attrs,fit and 7.inv())
-                            val appTask=Server.task(record)
-                            val blurActive=appTask!=null&&appTask !in minimizingTasks&&Server.call(appTask,"getWindowingMode")==5&&Server.call(appTask,"isVisibleRequested")==true
-                            // Native WM blur covers the camera strip while the app is
-                            // foreground. Minimize withdraws this request before Shell
-                            // returns to the icon, retaining the factory fade-out path.
-                            if(blurActive&&blurRadius>0) {
-                                if(!blurredWindows.containsKey(attrs))blurredWindows[attrs]=
-                                    (attrs.flags and android.view.WindowManager.LayoutParams.FLAG_BLUR_BEHIND!=0) to attrs.blurBehindRadius
-                                attrs.flags=attrs.flags or android.view.WindowManager.LayoutParams.FLAG_BLUR_BEHIND
-                                attrs.setBlurBehindRadius(blurRadius)
-                            } else restoreAppBlur(attrs)
                             if(settings.get().keyboard&&adjust!=android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING) {
                                 Server.task(record)?.let { nativeFreeform(it) }?.let { stack ->
                                     val field=stack.javaClass.getDeclaredField("mNeedAvoidFrameForIme").apply { isAccessible=true }
@@ -661,7 +684,7 @@ class RearAppDensityHook : RoxyHooker() {
                         val record=Server.field(window,"mActivityRecord")?:return@after
                         val info=Server.field(record,"info") as? ActivityInfo?:return@after
                         if(info.applicationInfo.uid%100000<10000||info.packageName in setOf(
-                                "com.xiaomi.subscreencenter","com.android.systemui","hk.uwu.reareye"))return@after
+                                "com.xiaomi.subscreencenter","com.android.systemui",BuildConfig.APPLICATION_ID))return@after
                         // The stock rear display never created an IME source while routing was
                         // blocked. Bootstrap the normal provider before its first show request.
                         Server.call(target,"getDisplayContent")?.let { display ->
@@ -684,7 +707,7 @@ class RearAppDensityHook : RoxyHooker() {
                         val record=Server.field(target,"mActivityRecord")?:return@after
                         val info=Server.field(record,"info") as? ActivityInfo?:return@after
                         if(info.applicationInfo.uid%100000<10000||info.packageName in setOf(
-                                "com.xiaomi.subscreencenter","com.android.systemui","hk.uwu.reareye"))return@after
+                                "com.xiaomi.subscreencenter","com.android.systemui",BuildConfig.APPLICATION_ID))return@after
                         val display=Server.call(target,"getDisplayContent")?:return@after
                         if(Server.field(display,"mImeWindow")!=null||Server.call(display,"getImeInputTarget")!==target)return@after
                         val provider=Server.call(instance?:return@after,"getImeSourceProvider")?:return@after
@@ -705,7 +728,7 @@ class RearAppDensityHook : RoxyHooker() {
                 if(!active||!settings.get().enabled)return@configure
                 if(Server.displayId(record)!=1||ActivityHostTaskConfigurationHook.isOwnedTask(record))return@configure
                 val pkg=Server.component(record)?.substringBefore('/')?:return@configure
-                if(pkg in excludedPackages || pkg in setOf("android","com.android.systemui","com.xiaomi.subscreencenter","com.miui.miwallpaper","com.miui.aod","hk.uwu.reareye"))return@configure
+                if(pkg in excludedPackages || pkg in setOf("android","com.android.systemui","com.xiaomi.subscreencenter","com.miui.miwallpaper","com.miui.aod",BuildConfig.APPLICATION_ID))return@configure
                 val info=Server.field(record,"info") as? ActivityInfo?:return@configure
                 if(info.applicationInfo.uid%100000<10000)return@configure
                 if(appUids.add(info.applicationInfo.uid))invalidateDisplayInfo()
@@ -799,8 +822,9 @@ class RearAppDensityHook : RoxyHooker() {
                 }
             }
             var preferencesSubscription:AutoCloseable?=null
-            val settingKeys=setOf(ConfigKeys.REAR_APP_ENABLED,ConfigKeys.REAR_APP_DPI,ConfigKeys.REAR_APP_KEYBOARD,
-                ConfigKeys.REAR_APP_REGION,ConfigKeys.ACTIVITIES_WHITELIST_APPS,ConfigKeys.REAR_APP_ROUNDED,ConfigKeys.REAR_APP_CORNER_RADIUS)
+            val settingKeys=setOf(ConfigKeys.REAR_APP_ENABLED,ConfigKeys.REAR_APP_DPI,
+                ConfigKeys.REAR_APP_REGION,ConfigKeys.ACTIVITIES_WHITELIST_APPS,ConfigKeys.REAR_APP_ROUNDED,
+                ConfigKeys.REAR_APP_CAMERA_FILL,ConfigKeys.REAR_APP_CORNER_RADIUS)
             val refresh=object:Runnable {
                 override fun run() {
                     if(!active||reloading)return
@@ -844,10 +868,6 @@ class RearAppDensityHook : RoxyHooker() {
                 }
                 appImeResize.clear()
                 appBarInsets.forEach { (attrs,types)->setFitTypes.invoke(attrs,types) };appBarInsets.clear()
-                blurredWindows.forEach { (attrs,original) ->
-                    if(!original.first)attrs.flags=attrs.flags and android.view.WindowManager.LayoutParams.FLAG_BLUR_BEHIND.inv()
-                    attrs.setBlurBehindRadius(original.second)
-                };blurredWindows.clear()
                 nativeImeAvoidance.forEach { (stack,original) ->
                     stack.javaClass.getDeclaredField("mNeedAvoidFrameForIme").apply { isAccessible=true }.setBoolean(stack,original)
                 };nativeImeAvoidance.clear()

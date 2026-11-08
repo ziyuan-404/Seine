@@ -1682,7 +1682,7 @@ class ReareyeToolEnvironment(private val context: Context) : ToolEnvironment {
             REAREye LuaJIT scripting API
             The entry must return a descriptor table. Example:
             local function hello(params, config, context)
-                return "Hello " .. tostring(params.name or "REAREye")
+                return "Hello " .. tostring(params.name or "Seine")
             end
             return { id = "hello_script", name = "Hello Script", providers = { hello = hello } }
 
@@ -1735,8 +1735,8 @@ class ReareyeToolEnvironment(private val context: Context) : ToolEnvironment {
             Use pcall for thrown network errors and inspect response.ok for HTTP failures.
 
             Debug UI executes providers directly. External ContentProvider forms:
-            content://hk.uwu.reareye.script/{projectId}/{providerId}?name=REAREye
-            content://hk.uwu.reareye.script/run?project=my_project&provider=hello&name=REAREye
+            content://fr.uwu.Seine.script/{projectId}/{providerId}?name=REAREye
+            content://fr.uwu.Seine.script/run?project=my_project&provider=hello&name=REAREye
             Result columns: project_id, provider_id, mime_type, data, error, elapsed_millis.
             Tool ids KIND:local_id are storage selection handles, not these runtime project ids.
 

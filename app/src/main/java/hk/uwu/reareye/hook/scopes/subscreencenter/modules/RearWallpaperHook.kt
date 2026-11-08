@@ -29,6 +29,8 @@ import androidx.core.net.toUri
 import androidx.core.view.isEmpty
 import com.highcapable.kavaref.KavaRef.Companion.asResolver
 import com.highcapable.kavaref.KavaRef.Companion.resolve
+import hk.uwu.reareye.hook.support.REAR_API_PERMISSION
+import hk.uwu.reareye.BuildConfig
 import hk.uwu.reareye.hook.support.ReloadableReceiverRegistration
 import hk.uwu.reareye.hook.support.YLog
 import hk.uwu.reareye.hook.support.hookAppInfo
@@ -83,7 +85,7 @@ class RearWallpaperHook : RoxyHooker() {
         private const val TAG = "REAREye-RearWallpaper"
         private const val RETRY_SWITCH_DELAY_MS = 350L
         private const val IMPORT_RES_PREFIX = "reareye_import_"
-        private const val IMPORT_RES_TYPE = "REAREye"
+        private const val IMPORT_RES_TYPE = "Seine"
         private const val DEFAULT_RES_SUB_TYPE = "reareye_import"
         private const val RELOAD_STATE_SELECTED_WALLPAPER_ID = "selected_wallpaper_id"
         private const val RELOAD_STATE_NEXT_SWITCH_AT = "next_switch_at"
@@ -594,7 +596,7 @@ class RearWallpaperHook : RoxyHooker() {
                 registrationContext,
                 hookBootstrapReceiver,
                 IntentFilter(RearWallpaperApiContract.ACTION_REQUEST_HOOK_SERVICE),
-                RearWallpaperApiContract.SERVICE_PERMISSION,
+                REAR_API_PERMISSION,
                 null,
                 ContextCompat.RECEIVER_EXPORTED,
             )
@@ -610,13 +612,13 @@ class RearWallpaperHook : RoxyHooker() {
             throw SecurityException("context not ready for permission check")
         }
         val granted = ctx.checkPermission(
-            RearWallpaperApiContract.SERVICE_PERMISSION,
+            REAR_API_PERMISSION,
             Binder.getCallingPid(),
             uid,
         ) == PackageManager.PERMISSION_GRANTED
         if (!granted) {
             throw SecurityException(
-                "caller uid=$uid requires ${RearWallpaperApiContract.SERVICE_PERMISSION}"
+                "caller uid=$uid requires ${REAR_API_PERMISSION}"
             )
         }
     }
@@ -2321,7 +2323,7 @@ class RearWallpaperHook : RoxyHooker() {
                 if (!record.imported) {
                     return@synchronized operationResult(
                         false,
-                        error = "only REAREye imported wallpapers can be edited",
+                        error = "only wallpapers imported through Seine can be edited",
                     )
                 }
 
@@ -2414,7 +2416,7 @@ class RearWallpaperHook : RoxyHooker() {
                 if (!record.imported) {
                     return@synchronized operationResult(
                         false,
-                        error = "only REAREye imported wallpapers can be updated",
+                        error = "only wallpapers imported through Seine can be updated",
                     )
                 }
 
@@ -2518,7 +2520,7 @@ class RearWallpaperHook : RoxyHooker() {
                 if (!record.imported) {
                     return@synchronized operationResult(
                         false,
-                        error = "only REAREye imported wallpapers can generate previews",
+                        error = "only wallpapers imported through Seine can generate previews",
                     )
                 }
 
@@ -2589,7 +2591,7 @@ class RearWallpaperHook : RoxyHooker() {
                 if (!record.imported) {
                     return@synchronized operationResult(
                         false,
-                        error = "only REAREye imported wallpapers can be deleted",
+                        error = "only wallpapers imported through Seine can be deleted",
                     )
                 }
 
@@ -3452,7 +3454,7 @@ class RearWallpaperHook : RoxyHooker() {
         ) ?: source?.titleZhCn ?: titleFallback
         val descriptionFallback = options.optionString(
             RearWallpaperApiContract.BundleKeys.META_DESCRIPTION_FALLBACK,
-        ) ?: source?.descriptionFallback ?: "Imported by REAREye"
+        ) ?: source?.descriptionFallback ?: "Imported by Seine"
         val descriptionZhCn = options.optionString(
             RearWallpaperApiContract.BundleKeys.META_DESCRIPTION_ZH_CN,
         ) ?: source?.descriptionZhCn ?: descriptionFallback
@@ -3518,7 +3520,7 @@ class RearWallpaperHook : RoxyHooker() {
         json.put("contentPath", packageFile.absolutePath)
         json.put("rightsPath", json.optString("rightsPath", ""))
         json.put("screenRatio", json.optString("screenRatio", ""))
-        json.put("packageName", json.optString("packageName", "hk.uwu.reareye"))
+        json.put("packageName", json.optString("packageName", BuildConfig.APPLICATION_ID))
         json.put("subResourceType", values.category)
         json.put("resSubType", values.resSubType)
         json.put("isRearScreenEditable", values.editable)
@@ -3567,7 +3569,7 @@ class RearWallpaperHook : RoxyHooker() {
             put("editable", values.editable)
             put("isThirdParties", values.thirdParties)
             put("supportAon", values.supportAon)
-            put("packageName", "hk.uwu.reareye")
+            put("packageName", BuildConfig.APPLICATION_ID)
             put("isOnlineResource", false)
             put("onlineId", "")
         }

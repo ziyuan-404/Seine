@@ -8,6 +8,7 @@ import com.highcapable.kavaref.KavaRef.Companion.resolve
 import hk.uwu.reareye.hook.support.YLog
 import hk.uwu.reareye.hook.support.hookPrefs
 import hk.uwu.reareye.ui.config.ConfigKeys
+import hk.uwu.reareye.ui.config.RearAppDefaults
 import hk.uwu.roxyhook.HotReloadPolicy
 import hk.uwu.roxyhook.PackageScope
 import hk.uwu.roxyhook.RoxyHooker
@@ -58,7 +59,7 @@ class DisableSubScreenDoubleTapSleepHook : RoxyHooker() {
                     }.invoke()
                     val packageName=focused?.owningPackage()?:focusedPackageName
                     val info=focused?.let { Server.field(it,"mActivityRecord") }?.let { Server.field(it,"info") } as? ActivityInfo
-                    val rearApp=hookPrefs.getBoolean(ConfigKeys.REAR_APP_ENABLED,false)&&
+                    val rearApp=hookPrefs.getBoolean(ConfigKeys.REAR_APP_ENABLED, RearAppDefaults.ENABLED)&&
                         focused?.let { Server.displayId(it)==1 }==true&&info!=null&&info.applicationInfo.uid%100000>=10000&&
                         info.packageName !in setOf("com.xiaomi.subscreencenter","com.android.systemui","com.miui.aod","com.miui.miwallpaper")
                     if (rearApp || packageName != null && packageName in whitelist) {

@@ -33,8 +33,6 @@ import androidx.compose.foundation.style.selected
 import androidx.compose.foundation.style.styleable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Apps
-import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.runtime.Composable
@@ -45,9 +43,7 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -63,10 +59,12 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import hk.uwu.reareye.R
+import hk.uwu.reareye.ui.components.SeineMenuDefaults
 import hk.uwu.reareye.ui.components.RearSearchBar
 import hk.uwu.reareye.ui.components.rememberApplicationIconBitmap
 import hk.uwu.reareye.ui.config.ConfigItem
 import hk.uwu.reareye.ui.config.ConfigKeys
+import hk.uwu.reareye.ui.config.RearNotificationDefaults
 import hk.uwu.reareye.ui.config.PrefsManager
 import hk.uwu.reareye.ui.config.rememberRemotePrefsStatusRevision
 import hk.uwu.reareye.ui.theme.rearAcrylicEffect
@@ -78,18 +76,12 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import top.yukonga.miuix.kmp.basic.Card
-import top.yukonga.miuix.kmp.basic.DropdownDefaults
-import top.yukonga.miuix.kmp.basic.DropdownImpl
-import top.yukonga.miuix.kmp.basic.DropdownItem
 import top.yukonga.miuix.kmp.basic.FabPosition
 import top.yukonga.miuix.kmp.basic.FloatingActionButton
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.InfiniteProgressIndicator
-import top.yukonga.miuix.kmp.basic.ListPopupColumn
-import top.yukonga.miuix.kmp.basic.ListPopupDefaults
 import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
-import top.yukonga.miuix.kmp.basic.PopupPositionProvider
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TopAppBar
@@ -98,10 +90,13 @@ import top.yukonga.miuix.kmp.icon.basic.Check
 import top.yukonga.miuix.kmp.icon.extended.MoreCircle
 import top.yukonga.miuix.kmp.icon.extended.Sort
 import top.yukonga.miuix.kmp.icon.extended.Tune
-import top.yukonga.miuix.kmp.overlay.OverlayListPopup
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.overScrollVertical
 import top.yukonga.miuix.kmp.utils.scrollEndHaptic
+import kotlinx.collections.immutable.persistentListOf
+import ui.feice.mochi.basic.MochiIconDropdown
+import ui.feice.mochi.basic.MochiItem
+import ui.feice.mochi.icons.MochiIonicon
 
 private enum class AppSortMode {
     LABEL,
@@ -547,7 +542,6 @@ fun AppListSelectorScreen(
     LocalDensity.current
     val focusManager = LocalFocusManager.current
     val keyboardController = LocalSoftwareKeyboardController.current
-    val popupScope = rememberCoroutineScope()
 
     var appCatalog by remember { mutableStateOf<AppCatalog?>(null) }
     var loading by remember { mutableStateOf(true) }
@@ -583,7 +577,10 @@ fun AppListSelectorScreen(
         }
 
         val loadedSelection = withContext(Dispatchers.IO) {
-            val selected = prefsManager.getStringSet(configItem.key, configItem.type.defaultStringSet)
+            val stored = prefsManager.getStringSet(configItem.key, configItem.type.defaultStringSet)
+            val selected = if (configItem.key == ConfigKeys.REAR_NOTIFICATION_SYNC_APPS) {
+                RearNotificationDefaults.resolve(stored, pm)
+            } else stored
             if (configItem.key != ConfigKeys.ACTIVITIES_WHITELIST_APPS) selected
             else {
                 val saved = prefsManager.getString(ConfigKeys.REAR_APP_ORDER_DATA, "")
@@ -642,15 +639,6 @@ fun AppListSelectorScreen(
             )
         }
     }
-    val dismissThenApply = remember(popupScope) {
-        { dismiss: () -> Unit, apply: () -> Unit ->
-            dismiss()
-            popupScope.launch {
-                withFrameNanos { }
-                apply()
-            }
-        }
-    }
 
     Scaffold(
         topBar = {
@@ -678,190 +666,67 @@ fun AppListSelectorScreen(
                         }
                     },
                     actions = {
-                        Box {
-                            IconButton(
-                                onClick = { showSortMenu.value = true },
-                                holdDownState = showSortMenu.value
-                            ) {
-                                Icon(
-                                    imageVector = MiuixIcons.Regular.Sort,
-                                    contentDescription = stringResource(R.string.app_list_sort),
-                                    tint = MiuixTheme.colorScheme.onBackground,
-                                )
-                            }
-                            OverlayListPopup(
-                                show = showSortMenu.value,
-                                popupModifier = Modifier,
-                                popupPositionProvider = ListPopupDefaults.DropdownPositionProvider,
-                                alignment = PopupPositionProvider.Align.End,
-                                enableWindowDim = true,
-                                onDismissRequest = { showSortMenu.value = false },
-                                maxHeight = null,
-                                minWidth = 200.dp,
-                                renderInRootScaffold = true,
-                                content = {
-                                    ListPopupColumn {
-                                        DropdownImpl(
-                                            item = DropdownItem(title = stringResource(R.string.app_list_sort_by_name)),
-                                            optionSize = 3,
-                                            isSelected = sortMode == AppSortMode.LABEL,
-                                            index = 0,
-                                            dropdownColors = DropdownDefaults.dropdownColors(),
-                                            onSelectedIndexChange = {
-                                                dismissThenApply(
-                                                    { showSortMenu.value = false },
-                                                    { sortMode = AppSortMode.LABEL },
-                                                )
-                                            }
-                                        )
-                                        DropdownImpl(
-                                            item = DropdownItem(title = stringResource(R.string.app_list_sort_by_package)),
-                                            optionSize = 3,
-                                            isSelected = sortMode == AppSortMode.PACKAGE,
-                                            index = 1,
-                                            dropdownColors = DropdownDefaults.dropdownColors(),
-                                            onSelectedIndexChange = {
-                                                dismissThenApply(
-                                                    { showSortMenu.value = false },
-                                                    { sortMode = AppSortMode.PACKAGE },
-                                                )
-                                            }
-                                        )
-                                        DropdownImpl(
-                                            item = DropdownItem(title = stringResource(R.string.app_list_sort_reverse)),
-                                            optionSize = 3,
-                                            isSelected = reverseOrder,
-                                            index = 2,
-                                            dropdownColors = DropdownDefaults.dropdownColors(),
-                                            onSelectedIndexChange = {
-                                                dismissThenApply(
-                                                    { showSortMenu.value = false },
-                                                    { reverseOrder = !reverseOrder },
-                                                )
-                                            }
-                                        )
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            MochiIconDropdown(
+                                behavior = SeineMenuDefaults.Trailing,
+                                expanded = showSortMenu.value,
+                                onExpandedChange = { showSortMenu.value = it },
+                                items = persistentListOf(
+                                    MochiItem(stringResource(R.string.app_list_sort_by_name)),
+                                    MochiItem(stringResource(R.string.app_list_sort_by_package)),
+                                    MochiItem(
+                                        stringResource(R.string.app_list_sort_reverse),
+                                        icon = if (reverseOrder) {
+                                            { tint -> MochiIonicon("checkmark", tint = tint) }
+                                        } else null,
+                                    ),
+                                ),
+                                selectedIndex = if (sortMode == AppSortMode.LABEL) 0 else 1,
+                                onItemClick = { index ->
+                                    when (index) {
+                                        0 -> sortMode = AppSortMode.LABEL
+                                        1 -> sortMode = AppSortMode.PACKAGE
+                                        2 -> reverseOrder = !reverseOrder
                                     }
-                                })
-                        }
-
-                        Box {
-                            IconButton(
-                                onClick = { showFilterMenu.value = true },
-                                holdDownState = showFilterMenu.value
+                                },
                             ) {
-                                Icon(
-                                    imageVector = MiuixIcons.Regular.Tune,
-                                    contentDescription = stringResource(R.string.app_list_filter),
-                                    tint = MiuixTheme.colorScheme.onBackground,
-                                )
+                                Icon(MiuixIcons.Regular.Sort, stringResource(R.string.app_list_sort))
                             }
-                            OverlayListPopup(
-                                show = showFilterMenu.value,
-                                popupModifier = Modifier,
-                                popupPositionProvider = ListPopupDefaults.DropdownPositionProvider,
-                                alignment = PopupPositionProvider.Align.End,
-                                enableWindowDim = true,
-                                onDismissRequest = { showFilterMenu.value = false },
-                                maxHeight = null,
-                                minWidth = 200.dp,
-                                renderInRootScaffold = true,
-                                content = {
-                                    ListPopupColumn {
-                                        DropdownImpl(
-                                            item = DropdownItem(
-                                                icon = { modifier ->
-                                                    Icon(
-                                                        imageVector = Icons.Filled.Apps,
-                                                        contentDescription = null,
-                                                        modifier = modifier,
-                                                        tint = MiuixTheme.colorScheme.onBackground,
-                                                    )
-                                                },
-                                                title = stringResource(R.string.show_system_apps),
-                                            ),
-                                            optionSize = 1,
-                                            isSelected = showSystemApps,
-                                            index = 0,
-                                            dropdownColors = DropdownDefaults.dropdownColors(),
-                                            onSelectedIndexChange = {
-                                                dismissThenApply(
-                                                    { showFilterMenu.value = false },
-                                                    { showSystemApps = !showSystemApps },
-                                                )
-                                            },
-                                        )
-                                    }
-                                })
-                        }
-
-                        Box {
-                            IconButton(
-                                onClick = { showMoreMenu.value = true },
-                                holdDownState = showMoreMenu.value,
+                            MochiIconDropdown(
+                                behavior = SeineMenuDefaults.Trailing,
+                                expanded = showFilterMenu.value,
+                                onExpandedChange = { showFilterMenu.value = it },
+                                items = persistentListOf(MochiItem(stringResource(R.string.show_system_apps))),
+                                selectedIndex = if (showSystemApps) 0 else -1,
+                                onItemClick = { showSystemApps = !showSystemApps },
                             ) {
-                                Icon(
-                                    imageVector = MiuixIcons.MoreCircle,
-                                    contentDescription = stringResource(R.string.app_list_more_actions),
-                                    tint = MiuixTheme.colorScheme.onBackground,
-                                )
+                                Icon(MiuixIcons.Regular.Tune, stringResource(R.string.app_list_filter))
                             }
-                            OverlayListPopup(
-                                show = showMoreMenu.value,
-                                popupModifier = Modifier,
-                                popupPositionProvider = ListPopupDefaults.DropdownPositionProvider,
-                                alignment = PopupPositionProvider.Align.End,
-                                enableWindowDim = true,
-                                onDismissRequest = { showMoreMenu.value = false },
-                                maxHeight = null,
-                                minWidth = 200.dp,
-                                renderInRootScaffold = true,
-                                content = {
-                                    ListPopupColumn {
-                                        if (configItem.key == ConfigKeys.REAR_NOTIFICATION_SYNC_APPS) {
-                                            DropdownImpl(
-                                                item = DropdownItem(title = stringResource(R.string.rear_notification_select_all_apps)),
-                                                optionSize = 2,
-                                                isSelected = false,
-                                                index = 0,
-                                                dropdownColors = DropdownDefaults.dropdownColors(),
-                                                onSelectedIndexChange = {
-                                                    dismissThenApply(
-                                                        { showMoreMenu.value = false },
-                                                        {
-                                                            appCatalog?.let { catalog ->
-                                                                selectedOrder.clear()
-                                                                selectedOrder.addAll(catalog.byLabel.map { it.packageName })
-                                                            }
-                                                        },
-                                                    )
-                                                },
-                                            )
+                            val canSelectAll = configItem.key == ConfigKeys.REAR_NOTIFICATION_SYNC_APPS
+                            val clear = MochiItem(stringResource(R.string.selection_clear))
+                            val actions = if (canSelectAll) {
+                                persistentListOf(MochiItem(stringResource(R.string.rear_notification_select_all_apps)), clear)
+                            } else {
+                                persistentListOf(clear)
+                            }
+                            MochiIconDropdown(
+                                behavior = SeineMenuDefaults.Trailing,
+                                expanded = showMoreMenu.value,
+                                onExpandedChange = { showMoreMenu.value = it },
+                                items = actions,
+                                onItemClick = { index ->
+                                    if (canSelectAll && index == 0) {
+                                        appCatalog?.let { catalog ->
+                                            selectedOrder.clear()
+                                            selectedOrder.addAll(catalog.byLabel.map { it.packageName })
                                         }
-                                        DropdownImpl(
-                                            item = DropdownItem(
-                                                icon = { modifier ->
-                                                    Icon(
-                                                        imageVector = Icons.Filled.Delete,
-                                                        contentDescription = null,
-                                                        modifier = modifier,
-                                                        tint = MiuixTheme.colorScheme.onBackground,
-                                                    )
-                                                },
-                                                title = stringResource(R.string.selection_clear),
-                                            ),
-                                            optionSize = if (configItem.key == ConfigKeys.REAR_NOTIFICATION_SYNC_APPS) 2 else 1,
-                                            isSelected = false,
-                                            index = if (configItem.key == ConfigKeys.REAR_NOTIFICATION_SYNC_APPS) 1 else 0,
-                                            dropdownColors = DropdownDefaults.dropdownColors(),
-                                            onSelectedIndexChange = {
-                                                dismissThenApply(
-                                                    { showMoreMenu.value = false },
-                                                    { selectedOrder.clear() },
-                                                )
-                                            },
-                                        )
+                                    } else {
+                                        selectedOrder.clear()
                                     }
-                                })
+                                },
+                            ) {
+                                Icon(MiuixIcons.MoreCircle, stringResource(R.string.app_list_more_actions))
+                            }
                         }
                     },
                     scrollBehavior = scrollBehavior,
@@ -900,7 +765,11 @@ fun AppListSelectorScreen(
             FloatingActionButton(
                 onClick = {
                     if (!selectedOrderLoaded) return@FloatingActionButton
-                    prefsManager.putStringSet(configItem.key, selectedLookup)
+                    val allPackages = appCatalog?.byLabel?.mapTo(hashSetOf()) { it.packageName }
+                    val selection = if (configItem.key == ConfigKeys.REAR_NOTIFICATION_SYNC_APPS &&
+                        allPackages != null && selectedLookup == allPackages
+                    ) RearNotificationDefaults.APPS else selectedLookup
+                    prefsManager.putStringSet(configItem.key, selection)
                     if (configItem.key == ConfigKeys.ACTIVITIES_WHITELIST_APPS) {
                         prefsManager.putString(ConfigKeys.REAR_APP_ORDER_DATA, selectedOrder.joinToString("\n"))
                     }

@@ -19,6 +19,7 @@ import hk.uwu.reareye.hook.utils.createDexKitCacheBridge
 import hk.uwu.reareye.hook.utils.resolveDexKitMethodInjectionPoint
 import hk.uwu.reareye.hook.utils.resolveHookPackageVersionCode
 import hk.uwu.reareye.ui.config.ConfigKeys
+import hk.uwu.reareye.ui.config.RearNotificationDefaults
 import hk.uwu.roxyhook.PackageScope
 import hk.uwu.roxyhook.RoxyHooker
 import org.luckypray.dexkit.annotations.DexKitExperimentalApi
@@ -62,8 +63,8 @@ class RearRecorderScope : RoxyHooker() {
                 var currentPlayer: Any? = null
                 var session = UUID.randomUUID().toString()
                 val actionName = "hk.uwu.reareye.recorder.PLAYBACK"
-                fun enabled() = hookPrefs.getBoolean(ConfigKeys.REAR_NOTIFICATION_SYNC, false) &&
-                    "com.android.soundrecorder" in hookPrefs.getStringSet(ConfigKeys.REAR_NOTIFICATION_SYNC_APPS, emptySet())
+                fun enabled() = hookPrefs.getBoolean(ConfigKeys.REAR_NOTIFICATION_SYNC, RearNotificationDefaults.ENABLED) &&
+                    RearNotificationDefaults.includes(hookPrefs.getStringSet(ConfigKeys.REAR_NOTIFICATION_SYNC_APPS, RearNotificationDefaults.APPS), "com.android.soundrecorder")
                 val receiver = object : BroadcastReceiver() {
                     override fun onReceive(context: Context, intent: Intent) {
                         if (!enabled() || intent.action != actionName || intent.getStringExtra("session") != session) return

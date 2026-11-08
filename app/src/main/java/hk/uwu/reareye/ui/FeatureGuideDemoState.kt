@@ -5,6 +5,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
+import hk.uwu.reareye.BuildConfig
 import hk.uwu.reareye.hook.support.HookPrefs
 import hk.uwu.reareye.hook.support.HookPrefsEditor
 import hk.uwu.reareye.repository.rearwallpaper.RearWallpaperInfo
@@ -35,7 +36,7 @@ internal class FeatureGuideDemoState(initialCardTitle: String = "demo_clock") {
             RearCardConfig(
                 id = "guide-card",
                 title = initialCardTitle,
-                packageName = "hk.uwu.reareye",
+                packageName = BuildConfig.APPLICATION_ID,
                 business = "demo_clock",
             )
         )
@@ -43,7 +44,7 @@ internal class FeatureGuideDemoState(initialCardTitle: String = "demo_clock") {
     var businesses by mutableStateOf(
         listOf(
             RearBusinessConfig(
-                id = "guide-component", packageName = "hk.uwu.reareye", business = "demo_clock",
+                id = "guide-component", packageName = BuildConfig.APPLICATION_ID, business = "demo_clock",
                 filePath = "/demo/clock.zip",
             )
         )

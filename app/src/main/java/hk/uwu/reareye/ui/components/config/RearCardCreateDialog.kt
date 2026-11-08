@@ -1,58 +1,33 @@
 package hk.uwu.reareye.ui.components.config
 
-import androidx.compose.foundation.LocalOverscrollFactory
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.rememberTextMeasurer
-import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.IntOffset
-import androidx.compose.ui.unit.IntRect
-import androidx.compose.ui.unit.IntSize
-import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import hk.uwu.reareye.R
+import hk.uwu.reareye.ui.components.SeineMenuDefaults
 import hk.uwu.reareye.repository.rearwidget.RearBusinessConfig
 import hk.uwu.reareye.ui.components.DialogFormColumn
-import hk.uwu.reareye.ui.components.LocalOverlayDialogBounds
 import hk.uwu.reareye.ui.components.OverlayDialog
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
-import top.yukonga.miuix.kmp.basic.DropdownDefaults
-import top.yukonga.miuix.kmp.basic.DropdownImpl
-import top.yukonga.miuix.kmp.basic.DropdownItem
-import top.yukonga.miuix.kmp.basic.ListPopupDefaults
-import top.yukonga.miuix.kmp.basic.PopupPositionProvider
 import top.yukonga.miuix.kmp.basic.TabRowWithContour
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextField
-import top.yukonga.miuix.kmp.overlay.OverlayListPopup
 import top.yukonga.miuix.kmp.preference.SwitchPreference
-import top.yukonga.miuix.kmp.preference.WindowSpinnerPreference
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import kotlinx.collections.immutable.toPersistentList
+import ui.feice.mochi.basic.MochiIconDropdown
+import ui.feice.mochi.basic.MochiItem
+import ui.feice.mochi.icons.MochiIonicon
 
 @Composable
 internal fun RearCardCreateDialog(
@@ -87,35 +62,6 @@ internal fun RearCardCreateDialog(
             .distinctBy { it.business }
             .sortedBy { it.business.lowercase() }
     }
-    val autocompleteDensity = LocalDensity.current
-    val autocompleteTextMeasurer = rememberTextMeasurer()
-    val autocompleteTextStyle = TextStyle(
-        fontSize = MiuixTheme.textStyles.body1.fontSize,
-        fontWeight = FontWeight.Medium,
-    )
-    val autocompleteWidth = remember(
-        autocompleteBusinesses,
-        autocompleteDensity,
-        autocompleteTextMeasurer,
-        autocompleteTextStyle,
-    ) {
-        val widestTextPx = autocompleteBusinesses.maxOfOrNull { business ->
-            autocompleteTextMeasurer.measure(
-                text = AnnotatedString(business.business),
-                style = autocompleteTextStyle,
-                maxLines = 1,
-                softWrap = false,
-            ).size.width
-        } ?: 0
-        with(autocompleteDensity) {
-            (
-                    widestTextPx.toDp() +
-                            DropdownDefaults.DialogHorizontalPadding * 2 +
-                            DropdownDefaults.CheckIconStartPadding +
-                            DropdownDefaults.CheckIconSize
-                    ).coerceIn(ListPopupDefaults.MinWidth, 288.dp)
-        }
-    }
     OverlayDialog(
         show = show,
         title = stringResource(
@@ -145,12 +91,16 @@ internal fun RearCardCreateDialog(
                 if (businesses.isNotEmpty()) {
                     val safeBusinessIndex =
                         selectedAppBusinessIndex.coerceIn(0, businesses.lastIndex)
-                    WindowSpinnerPreference(
-                        items = businesses.map { business -> DropdownItem(title = business.business) },
-                        selectedIndex = safeBusinessIndex,
+                    var expanded by remember { mutableStateOf(false) }
+                    ConfigDropdownRow(
                         title = stringResource(R.string.rear_widget_app_bound_component_title),
-                        summary = businesses[safeBusinessIndex].business,
-                        onSelectedIndexChange = onSelectedAppBusinessIndexChange,
+                        summary = null,
+                        currentLabel = businesses[safeBusinessIndex].business,
+                        labels = businesses.map { it.business },
+                        selectedIndex = safeBusinessIndex,
+                        expanded = expanded,
+                        onExpandedChange = { expanded = it },
+                        onSelected = onSelectedAppBusinessIndexChange,
                     )
                 } else {
                     Text(stringResource(R.string.rear_widget_app_no_component))
@@ -178,7 +128,6 @@ internal fun RearCardCreateDialog(
                 RearBusinessAutocompleteTextField(
                     value = normalBusiness,
                     businesses = autocompleteBusinesses,
-                    suggestionWidth = autocompleteWidth,
                     onValueChange = onNormalBusinessChange,
                     onSelect = { business ->
                         onNormalBusinessChange(business.business)
@@ -222,62 +171,10 @@ internal fun RearCardCreateDialog(
 private fun RearBusinessAutocompleteTextField(
     value: String,
     businesses: List<RearBusinessConfig>,
-    suggestionWidth: Dp,
     onValueChange: (String) -> Unit,
     onSelect: (RearBusinessConfig) -> Unit,
 ) {
     var expanded by remember { mutableStateOf(false) }
-    val suggestionShape = RoundedCornerShape(16.dp)
-    val dialogBounds = LocalOverlayDialogBounds.current
-    val density = LocalDensity.current
-    val dialogInsetPx = with(density) { 8.dp.roundToPx() }
-    val defaultPositionProvider = ListPopupDefaults.DropdownPositionProvider
-    val boundedPositionProvider = remember(dialogBounds, dialogInsetPx) {
-        object : PopupPositionProvider {
-            override fun getMargins(): PaddingValues = defaultPositionProvider.getMargins()
-
-            override fun calculatePosition(
-                anchorBounds: IntRect,
-                windowBounds: IntRect,
-                layoutDirection: LayoutDirection,
-                popupContentSize: IntSize,
-                popupMargin: IntRect,
-                alignment: PopupPositionProvider.Align,
-            ): IntOffset {
-                val boundedWindow = if (dialogBounds != IntRect.Zero) {
-                    val left = maxOf(windowBounds.left, dialogBounds.left + dialogInsetPx)
-                    val top = maxOf(windowBounds.top, dialogBounds.top + dialogInsetPx)
-                    val right = minOf(windowBounds.right, dialogBounds.right - dialogInsetPx)
-                    val bottom = minOf(windowBounds.bottom, dialogBounds.bottom - dialogInsetPx)
-                    if (right > left && bottom > top) {
-                        IntRect(left = left, top = top, right = right, bottom = bottom)
-                    } else {
-                        windowBounds
-                    }
-                } else {
-                    windowBounds
-                }
-                return defaultPositionProvider.calculatePosition(
-                    anchorBounds = anchorBounds,
-                    windowBounds = boundedWindow,
-                    layoutDirection = layoutDirection,
-                    popupContentSize = popupContentSize,
-                    popupMargin = popupMargin,
-                    alignment = alignment,
-                )
-            }
-        }
-    }
-    val suggestionMaxHeight = if (dialogBounds == IntRect.Zero) {
-        DropdownDefaults.MinHeight * 3
-    } else {
-        with(density) {
-            (dialogBounds.height - dialogInsetPx * 2)
-                .coerceAtLeast(50.dp.roundToPx())
-                .toDp()
-                .coerceAtMost(DropdownDefaults.MinHeight * 3)
-        }
-    }
     val normalizedQuery = value.trim()
     val suggestions = remember(businesses, normalizedQuery) {
         if (normalizedQuery.isEmpty()) {
@@ -289,68 +186,35 @@ private fun RearBusinessAutocompleteTextField(
         }
     }
 
-    Box(modifier = Modifier.fillMaxWidth()) {
+    val items = remember(suggestions) {
+        suggestions.map { MochiItem(it.business) }.toPersistentList()
+    }
+
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
         TextField(
             value = value,
-            onValueChange = { nextValue ->
-                onValueChange(nextValue)
-                expanded = true
-            },
-            modifier = Modifier
-                .fillMaxWidth()
-                .onFocusChanged { focusState ->
-                    expanded = focusState.isFocused
-                },
+            onValueChange = onValueChange,
+            modifier = Modifier.weight(1f),
             label = stringResource(R.string.rear_widget_business_name),
             singleLine = true,
         )
-
-        OverlayListPopup(
-            show = expanded && suggestions.isNotEmpty(),
-            popupModifier = Modifier,
-            popupPositionProvider = boundedPositionProvider,
-            alignment = PopupPositionProvider.Align.Start,
-            enableWindowDim = false,
-            onDismissRequest = { expanded = false },
-            maxHeight = suggestionMaxHeight,
-            minWidth = ListPopupDefaults.MinWidth,
-            renderInRootScaffold = false,
-        ) {
-            Box(
-                modifier = Modifier
-                    .clip(suggestionShape)
-                    .background(MiuixTheme.colorScheme.surfaceContainerHigh)
-                    .border(
-                        width = 1.dp,
-                        color = MiuixTheme.colorScheme.outline.copy(alpha = 0.32f),
-                        shape = suggestionShape,
-                    ),
+        if (items.isNotEmpty()) {
+            MochiIconDropdown(
+                behavior = SeineMenuDefaults.Trailing,
+                expanded = expanded,
+                onExpandedChange = { expanded = it },
+                items = items,
+                onItemClick = { index -> onSelect(suggestions[index]) },
+                selectedIndex = suggestions.indexOfFirst { it.business.equals(value, ignoreCase = true) },
+                menuWidth = 232.dp,
             ) {
-                CompositionLocalProvider(LocalOverscrollFactory provides null) {
-                    LazyColumn(
-                        modifier = Modifier
-                            .width(suggestionWidth)
-                            .heightIn(max = suggestionMaxHeight),
-                    ) {
-                        itemsIndexed(
-                            items = suggestions,
-                            key = { _, business -> business.business },
-                        ) { index, business ->
-                            DropdownImpl(
-                                item = DropdownItem(title = business.business),
-                                optionSize = suggestions.size,
-                                isSelected = business.business.equals(value, ignoreCase = true),
-                                index = index,
-                                dropdownColors = DropdownDefaults.dropdownColors(),
-                                dialogMode = true,
-                                onSelectedIndexChange = {
-                                    onSelect(business)
-                                    expanded = false
-                                },
-                            )
-                        }
-                    }
-                }
+                MochiIonicon(
+                    "chevron-down",
+                    contentDescription = stringResource(R.string.rear_widget_app_bound_component_title),
+                )
             }
         }
     }

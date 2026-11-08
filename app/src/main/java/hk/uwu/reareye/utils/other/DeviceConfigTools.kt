@@ -2,6 +2,7 @@ package hk.uwu.reareye.utils.other
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.content.pm.PackageManager
 import android.os.Build
 import hk.uwu.reareye.utils.RootHelper.executeRootCommand
 import hk.uwu.reareye.utils.RootHelper.hasRootAccess
@@ -48,13 +49,10 @@ object DeviceConfigTools {
         return ret
     }
 
-    fun getSubScreenVersion(context: Context): String {
-        val packageManager = context.packageManager
-        return try {
-            val packageInfo = packageManager.getPackageInfo("com.xiaomi.subscreencenter", 0)
-            packageInfo.versionName.toString()
-        } catch (_: Exception) {
-            "UNKNOWN"
+    fun getPackageVersion(context: Context, packageName: String): String? =
+        try {
+            context.packageManager.getPackageInfo(packageName, 0).versionName
+        } catch (_: PackageManager.NameNotFoundException) {
+            null
         }
-    }
 }

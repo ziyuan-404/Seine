@@ -31,7 +31,7 @@
 
 ## 真機驗收（尚未執行）
 
-- 在有備份的測試裝置，記錄 runtime.json 原始 bytes、有效 JSON 陣列項目、UID/GID/mode、SELinux 標籤與 inode；另核對實際宿主 package UID，不把它誤認為 REAREye UI UID。
+- 在有備份的測試裝置，記錄 runtime.json 原始 bytes、有效 JSON 陣列項目、UID/GID/mode、SELinux 標籤與 inode；另核對實際宿主 package UID，不把它誤認為 Seine UI UID。
 - 覆蓋匯入、刪除、metadata 更新、套件替換、預覽產生、模板設定／重設。成功時只有預期清單內容改變；UID/GID/mode/標籤不變。
 - 權限不足或標籤讀取失敗時必須回報失敗，runtime.json bytes 與 metadata 完全不變；不能提示成功。
 - 在其他 writer 更新後重試舊快照須失敗；仍須另外測系統同時套用主題並記錄未協作競爭限制。

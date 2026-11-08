@@ -749,7 +749,7 @@ private fun ScriptDebugBottomSheet(
 
 private val DEFAULT_SCRIPT = """
 local function hello(params, config, context)
-    return "Hello " .. tostring(params.name or "REAREye")
+    return "Hello " .. tostring(params.name or "Seine")
 end
 
 return {
@@ -761,7 +761,7 @@ return {
 
 private val DEFAULT_PROJECT = """
 local function hello(params, config, context)
-    return "Hello from project: " .. tostring(params.name or "REAREye")
+    return "Hello from project: " .. tostring(params.name or "Seine")
 end
 
 return {

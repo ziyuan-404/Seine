@@ -17,6 +17,15 @@ pluginManagement {
 dependencyResolutionManagement {
     repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
     repositories {
+        exclusiveContent {
+            forRepository { mavenCentral() }
+            filter {
+                includeGroup("io.github.feice11")
+                includeGroup("com.materialkolor")
+                includeModule("org.jetbrains.kotlinx", "kotlinx-collections-immutable")
+                includeModule("org.jetbrains.kotlinx", "kotlinx-collections-immutable-jvm")
+            }
+        }
         mavenLocal()
         maven("https://jitpack.io")
         maven("https://repo.fastmcmirror.org/content/repositories/releases/")
@@ -32,7 +41,7 @@ plugins {
 val gitHash: String by lazy { runGitCommand("rev-parse", "--short", "HEAD") ?: "unknown" }
 val gitBranch: String by lazy {
     val url = runGitCommand("remote", "get-url", "origin")
-        ?: "https://github.com/killerprojecte/REAREye.git"
+        ?: "https://github.com/ziyuan-404/Seine.git"
     val branch = runGitCommand("branch", "--show-current") ?: "master"
     """github\.com[:/](.+?)(\.git)?$""".toRegex().find(url)?.groupValues?.get(1)
         .orEmpty() + "/" + branch
@@ -60,7 +69,6 @@ val isPublicBeta = providers.gradleProperty("isPublicBeta")
         taskName.contains("PublicBeta", ignoreCase = true)
     }
 
-gradle.extra["versionSuffix"] = "-$hash-r$versionCode-$buildSuffix"
 gradle.extra["isPublicBeta"] = isPublicBeta
 
 gropify {
@@ -85,9 +93,10 @@ gropify {
     }
 }
 
-rootProject.name = "REAREye"
+rootProject.name = "Seine"
 
 include(":app")
+include(":mochi-patched")
 include(":rear-widget-api")
 include(":rear-script-runtime")
 include(":agent-engine")

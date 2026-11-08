@@ -26,7 +26,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -126,23 +125,17 @@ import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.Checkbox
 import top.yukonga.miuix.kmp.basic.ColorPalette
 import top.yukonga.miuix.kmp.basic.ColorPicker
-import top.yukonga.miuix.kmp.basic.DropdownDefaults
-import top.yukonga.miuix.kmp.basic.DropdownImpl
-import top.yukonga.miuix.kmp.basic.DropdownItem
 import top.yukonga.miuix.kmp.basic.Icon
-import top.yukonga.miuix.kmp.basic.ListPopupColumn
-import top.yukonga.miuix.kmp.basic.ListPopupDefaults
-import top.yukonga.miuix.kmp.basic.PopupPositionProvider
 import top.yukonga.miuix.kmp.basic.Slider
 import top.yukonga.miuix.kmp.basic.TabRowWithContour
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextField
-import top.yukonga.miuix.kmp.overlay.OverlayListPopup
 import top.yukonga.miuix.kmp.preference.ArrowPreference
 import top.yukonga.miuix.kmp.preference.SwitchPreference
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import java.util.Locale
 import kotlin.math.roundToInt
+import hk.uwu.reareye.ui.components.config.ConfigDropdownRow
 
 @Composable
 fun WidgetTemplateConfigScreenContent(
@@ -1851,53 +1844,23 @@ private fun SingleChoicePreference(
     onSelected: (String) -> Unit,
 ) {
     val popupScope = rememberCoroutineScope()
-    var showPopup by remember(title, selectedValue, options) { mutableStateOf(false) }
-    val entries = remember(options, optionSummaries) {
-        options.mapIndexed { index, option ->
-            DropdownItem(
-                title = option,
-                summary = optionSummaries.getOrNull(index)?.takeIf { it.isBlank().not() },
-            )
-        }
-    }
-
-    Box(modifier = Modifier.fillMaxWidth()) {
-        ArrowPreference(
-            title = title,
-            summary = summary,
-            holdDownState = showPopup,
-            onClick = { if (options.isNotEmpty()) showPopup = true },
-        )
-
-        OverlayListPopup(
-            show = showPopup,
-            popupModifier = Modifier.widthIn(min = 220.dp),
-            popupPositionProvider = ListPopupDefaults.DropdownPositionProvider,
-            alignment = PopupPositionProvider.Align.End,
-            enableWindowDim = true,
-            onDismissRequest = { showPopup = false },
-            maxHeight = null,
-            minWidth = 220.dp,
-            renderInRootScaffold = true,
-        ) {
-            ListPopupColumn {
-                options.forEachIndexed { index, option ->
-                    DropdownImpl(
-                        item = entries[index],
-                        optionSize = options.size,
-                        isSelected = option == selectedValue,
-                        index = index,
-                        dropdownColors = DropdownDefaults.dropdownColors(),
-                        onSelectedIndexChange = {
-                            showPopup = false
-                            popupScope.launch {
-                                withFrameNanos { }
-                                onSelected(option)
-                            }
-                        },
-                    )
-                }
+    var showPopup by remember(title, options) { mutableStateOf(false) }
+    ConfigDropdownRow(
+        title = title,
+        summary = listOfNotNull(
+            summary,
+            optionSummaries.getOrNull(options.indexOf(selectedValue))?.takeIf { it.isNotBlank() },
+        ).distinct().joinToString("\n"),
+        currentLabel = selectedValue,
+        labels = options,
+        selectedIndex = options.indexOf(selectedValue),
+        expanded = showPopup,
+        onExpandedChange = { showPopup = it },
+        onSelected = { index ->
+            popupScope.launch {
+                withFrameNanos { }
+                onSelected(options[index])
             }
-        }
-    }
+        },
+    )
 }

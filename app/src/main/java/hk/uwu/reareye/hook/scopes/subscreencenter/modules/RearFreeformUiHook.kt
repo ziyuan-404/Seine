@@ -19,12 +19,13 @@ class RearFreeformUiHook : RoxyHooker() {
             val rear=context.getSystemService(android.hardware.display.DisplayManager::class.java)?.getDisplay(1)
             val hardwareRadius=rear?.getRoundedCorner(android.view.RoundedCorner.POSITION_TOP_RIGHT)?.radius?.toFloat()?:0f
             data class Corners(val enabled:Boolean,val rounded:Boolean,val radius:Float)
-            fun corners()=Corners(prefs.getBoolean(ConfigKeys.REAR_APP_ENABLED,false),
+            fun corners()=Corners(prefs.getBoolean(ConfigKeys.REAR_APP_ENABLED, RearAppDefaults.ENABLED),
                 prefs.getBoolean(ConfigKeys.REAR_APP_ROUNDED,true),prefs.getFloat(ConfigKeys.REAR_APP_CORNER_RADIUS,RearAppDefaults.CORNER_RADIUS))
             val config=java.util.concurrent.atomic.AtomicReference(corners())
+            val cameraFill = RearCameraAreaFill(context, prefs)
             val observer=prefs.observe { config.set(corners()) }
             var active=true
-            runtime.onClose { active=false;observer?.close() }
+            runtime.onClose { active=false;observer?.close();cameraFill.close() }
             val infoClass="com.android.wm.shell.multitasking.common.taskmanager.MiuiFreeformModeTaskInfo".toClass()
             // WMS updates an organized task's configuration, but its surface is
             // owned by Shell. A settings resize must update Shell's native Folme
@@ -43,6 +44,11 @@ class RearFreeformUiHook : RoxyHooker() {
                 }
                 after {
                     val previous=oldBounds.get();oldBounds.remove()
+                    val updatedInfo = instance
+                    val updatedTask = args(1).value as? android.app.ActivityManager.RunningTaskInfo
+                    if (active && updatedInfo != null && updatedTask != null) cameraFill.onTaskUpdated(updatedTask,
+                        Server.call(updatedInfo,"getLeash") as? android.view.SurfaceControl,
+                        Server.call(updatedInfo,"getTaskBounds") as? android.graphics.Rect)
                     if(previous==null||!active||!config.get().enabled)return@after
                     val info=instance?:return@after
                     val task=args(1).value as? android.app.ActivityManager.RunningTaskInfo?:return@after
@@ -84,7 +90,7 @@ class RearFreeformUiHook : RoxyHooker() {
             }.hook {
                 hotReloadPolicy=HotReloadPolicy.REINSTALL
                 after {
-                    if(hookPrefs.getBoolean(ConfigKeys.REAR_APP_ENABLED,false)&&args(0).value?.let { Server.field(it,"displayId") }==1)result=false
+                    if(hookPrefs.getBoolean(ConfigKeys.REAR_APP_ENABLED, RearAppDefaults.ENABLED)&&args(0).value?.let { Server.field(it,"displayId") }==1)result=false
                 }
             }
             hk.uwu.reareye.hook.support.YLog.info("Rear native corner policy installed: hardwareRadius=$hardwareRadius")
@@ -93,7 +99,7 @@ class RearFreeformUiHook : RoxyHooker() {
                 controller.resolve().firstMethod { name=method.name;parameters(*method.parameterTypes) }.hook {
                     hotReloadPolicy=HotReloadPolicy.REINSTALL
                     before {
-                        if(!hookPrefs.getBoolean(ConfigKeys.REAR_APP_ENABLED,false))return@before
+                        if(!hookPrefs.getBoolean(ConfigKeys.REAR_APP_ENABLED, RearAppDefaults.ENABLED))return@before
                         val task=args(0).value?.let { Server.call(it,"getTaskInfo") }?:return@before
                         if(Server.field(task,"displayId")==1)result=null
                     }

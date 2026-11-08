@@ -1,6 +1,7 @@
 package hk.uwu.reareye.hook.scopes.subscreencenter.modules.rearwidget
 
 import android.view.View
+import hk.uwu.reareye.R
 import hk.uwu.reareye.hook.support.YLog
 import java.lang.ref.WeakReference
 import java.util.WeakHashMap
@@ -36,6 +37,34 @@ internal object NativeRearCardHost {
         }
         return null
     }
+
+    fun isSelected(view: View): Boolean {
+        val widget = container(view)?.let { widgets[it]?.get() } ?: return false
+        var parent: View? = view
+        while (parent != null && parent.javaClass.name != "com.xiaomi.subscreencenter.SmartAssistantPanel")
+            parent = parent.parent as? View
+        val panel = parent ?: return false
+        // SmartAssistantPanel.E reads its center page and stores that native
+        // widget handle in I. Preloaded neighbors can still be shown and have
+        // a full global visible rect; those must not consume the intro/auth.
+        return runCatching {
+            // Match the ROM's N0/R0 priority guard: a stock notification popup
+            // can cover the selected widget without hiding its child Views.
+            val popup = panel.javaClass.getDeclaredField("E").apply { isAccessible = true }.get(panel) as? View
+            if (popup?.visibility == View.VISIBLE) return false
+            if (panel.rootView.findViewWithTag<View>("reareye_charging_overlay")?.isShown == true) return false
+            val selected = panel.javaClass.getDeclaredField("I").apply { isAccessible = true }.get(panel) ?: return false
+            selected.javaClass.getMethod("d").invoke(selected) === widget
+        }.getOrDefault(false)
+    }
+
+    fun selectedMirror(panel: View): View? = runCatching {
+        val selected = panel.javaClass.getDeclaredField("I").apply { isAccessible = true }.get(panel)
+            ?: return@runCatching null
+        val widget = selected.javaClass.getMethod("d").invoke(selected) ?: return@runCatching null
+        widgets.entries.firstOrNull { (root, owner) -> root.isAttachedToWindow && owner.get() === widget }
+            ?.key?.findViewById<View>(R.id.rear_notification_card)
+    }.getOrNull()
 
     fun beginDrag(view: View): () -> Unit {
         val widget = container(view)?.let { widgets[it]?.get() } ?: return {}

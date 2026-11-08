@@ -1,6 +1,6 @@
 # REAR Widget API
 
-- 由REAREye提供的背屏组件管理API
+- Seine 提供的背屏组件管理 API
 - 通过此API您可以在您的应用/模块中操作小米妙想背屏的组件
 
 ## 协议
@@ -9,13 +9,11 @@
 
 ## 依赖
 
-```kotlin
-repositories {
-    maven("https://repo.fastmcmirror.org/content/repositories/releases/")
-}
+在 Seine 源码仓库运行 `./gradlew :rear-widget-api:assembleRelease`，将 `rear-widget-api/build/outputs/aar/rear-widget-api-release.aar` 放入客户端项目的 `libs/`。
 
+```kotlin
 dependencies {
-    implementation("hk.uwu.reareye:rear-widget-api:1.0.1")
+    implementation(files("libs/rear-widget-api-release.aar"))
 }
 ```
 
@@ -23,5 +21,5 @@ dependencies {
 
 ```xml
 
-<uses-permission android:name="hk.uwu.reareye.permission.ACCESS_REAR_WIDGET_API" />
+<uses-permission android:name="fr.uwu.Seine.permission.ACCESS_REAR_WIDGET_API" />
 ```

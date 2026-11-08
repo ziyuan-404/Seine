@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.PhotoCamera
@@ -53,7 +52,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
-import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.InfiniteProgressIndicator
 import top.yukonga.miuix.kmp.basic.Text
@@ -167,7 +165,7 @@ internal fun RearAppCardManagementContent(
     ) {
         if (loading) {
             item(key = "app_card_loading") {
-                Card(modifier = Modifier.fillMaxWidth()) {
+                ConfigCard(modifier = Modifier.fillMaxWidth()) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -182,7 +180,7 @@ internal fun RearAppCardManagementContent(
             }
         } else if (cards.isEmpty()) {
             item(key = "app_card_empty") {
-                Card(modifier = Modifier.fillMaxWidth()) {
+                ConfigCard(modifier = Modifier.fillMaxWidth()) {
                     Text(
                         text = errorText ?: stringResource(R.string.rear_widget_empty_app_card),
                         modifier = Modifier.padding(16.dp),
@@ -220,7 +218,7 @@ internal fun RearAppCardManagementContent(
                             if (isDragging) {
                                 Modifier.shadow(
                                     elevation = 12.dp,
-                                    shape = RoundedCornerShape(20.dp),
+                                    shape = ConfigUi.CardShape,
                                     clip = false,
                                 )
                             } else {

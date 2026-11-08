@@ -133,5 +133,5 @@ class PresetPackDownloadServiceTest {
 
 // Unit tests do not load the merged Android manifest; use the application's prefs namespace.
 class PresetDownloadTestApplication : Application() {
-    override fun getPackageName(): String = "hk.uwu.reareye"
+    override fun getPackageName(): String = "fr.uwu.Seine"
 }

@@ -1,57 +1,56 @@
 package hk.uwu.reareye.ui.components.config
 
-import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.annotation.StringRes
 import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.updateTransition
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.zIndex
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.outlined.CloudDownload
-import androidx.compose.material.icons.rounded.Code
-import androidx.compose.material.icons.rounded.Favorite
-import androidx.compose.material.icons.rounded.Refresh
-import androidx.compose.material.icons.rounded.Search
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.zIndex
 import hk.uwu.reareye.R
 import hk.uwu.reareye.ui.config.ConfigCategory
 import hk.uwu.reareye.ui.featureGuideAnchor
-import kotlinx.coroutines.flow.distinctUntilChanged
-import top.yukonga.miuix.kmp.basic.Card
+import kotlinx.collections.immutable.toPersistentList
 import top.yukonga.miuix.kmp.basic.Icon
-import top.yukonga.miuix.kmp.basic.IconButton
-import top.yukonga.miuix.kmp.basic.ScrollBehavior
-import top.yukonga.miuix.kmp.basic.TabRowWithContour
-import top.yukonga.miuix.kmp.basic.TopAppBar
-import top.yukonga.miuix.kmp.preference.ArrowPreference
-import top.yukonga.miuix.kmp.theme.MiuixTheme
-import top.yukonga.miuix.kmp.utils.overScrollVertical
-import top.yukonga.miuix.kmp.utils.scrollEndHaptic
+import ui.feice.mochi.basic.MochiBarIconButton
+import ui.feice.mochi.effect.overscroll.MochiScrollDefaults
+import ui.feice.mochi.effect.overscroll.ProvideMochiOverscroll
+import ui.feice.mochi.icons.MochiIonicon
+import ui.feice.mochi.list.LocalMochiListItemSpacing
+import ui.feice.mochi.list.MochiListRow
+import ui.feice.mochi.list.mochiListSection
+import ui.feice.mochi.list.rows
+import ui.feice.mochi.navigation.MochiTitleBar
+import ui.feice.mochi.theme.LocalContentColor
+import ui.feice.mochi.theme.MochiDefaults
 
 private enum class DashboardTab { CARDS, COMPONENTS, WALLPAPERS, MORE }
 
@@ -67,14 +66,12 @@ enum class ConfigDashboardAction {
 internal fun ConfigDashboard(
     moreCategories: List<MoreCategory>,
     contentPadding: PaddingValues,
-    scrollBehavior: ScrollBehavior,
     modifier: Modifier = Modifier,
     onOpenCategory: (ConfigCategory) -> Unit,
     onOpenScriptManagement: () -> Unit,
     onMoreSearchRequested: () -> Unit,
     onOpenStore: () -> Unit,
-    onOpenFavoriteCategory: () -> Unit,
-    favoriteNodeCount: Int,
+    onOpenPresetPackDialog: (() -> Unit)? = null,
     selectedTabIndex: Int = 0,
     onSelectedTabIndexChange: (Int) -> Unit = {},
     moreScrollIndex: Int = 0,
@@ -113,136 +110,77 @@ internal fun ConfigDashboard(
         stringResource(R.string.config_tab_wallpapers),
         stringResource(R.string.config_tab_more),
     )
-    val tabTransition = updateTransition(selectedTab, label = "ConfigDashboardTabs")
+    val transition = updateTransition(selectedTab, label = "Config tabs")
+    val tabLabels = remember(tabs) { tabs.toPersistentList() }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .background(MochiDefaults.groupedBackground())
             .then(modifier),
     ) {
-        TopAppBar(
+        MochiTitleBar(
             modifier = Modifier.featureGuideAnchor("config_header_${selectedTab.ordinal}"),
-            title = stringResource(
-                when (selectedTab) {
-                    DashboardTab.CARDS -> R.string.config_tab_cards
-                    DashboardTab.COMPONENTS -> R.string.config_tab_components
-                    DashboardTab.WALLPAPERS -> R.string.config_tab_wallpapers
-                    DashboardTab.MORE -> R.string.configuration_title
-                }
-            ),
+            title = stringResource(R.string.configuration_title),
             navigationIcon = {
-                IconButton(
+                MochiBarIconButton(
                     onClick = onOpenStore,
                     modifier = Modifier.featureGuideAnchor("config_store_button"),
                 ) {
-                    Icon(
-                        Icons.Outlined.CloudDownload,
-                        contentDescription = stringResource(R.string.store_navigation),
-                    )
+                    MochiIonicon("cloud-download", contentDescription = stringResource(R.string.store_navigation))
                 }
             },
-            navigationIconPadding = 12.dp,
             actions = {
                 when (selectedTab) {
-                    DashboardTab.CARDS -> IconButton(onClick = {
+                    DashboardTab.CARDS -> DashboardAction("add", R.string.rear_widget_add_card) {
                         pendingAction = ConfigDashboardAction.ADD_CARD
-                    }) {
-                        Icon(
-                            Icons.Filled.Add,
-                            contentDescription = stringResource(R.string.rear_widget_add_card)
-                        )
                     }
-
-                    DashboardTab.COMPONENTS -> IconButton(onClick = {
+                    DashboardTab.COMPONENTS -> DashboardAction("add", R.string.rear_widget_add_business) {
                         pendingAction = ConfigDashboardAction.ADD_COMPONENT
-                    }) {
-                        Icon(
-                            Icons.Filled.Add,
-                            contentDescription = stringResource(R.string.rear_widget_add_business)
-                        )
                     }
-
                     DashboardTab.WALLPAPERS -> {
-                        IconButton(onClick = {
+                        DashboardAction("add", R.string.rear_wallpaper_import) {
                             pendingAction = ConfigDashboardAction.IMPORT_WALLPAPER
-                        }) {
-                            Icon(
-                                Icons.Filled.Add,
-                                contentDescription = stringResource(R.string.rear_wallpaper_import)
-                            )
                         }
-                        IconButton(onClick = {
+                        DashboardAction("refresh", R.string.rear_wallpaper_refresh) {
                             pendingAction = ConfigDashboardAction.REFRESH_WALLPAPER
-                        }) {
-                            Icon(
-                                Icons.Rounded.Refresh,
-                                contentDescription = stringResource(R.string.rear_wallpaper_refresh)
-                            )
                         }
                     }
-
-                    DashboardTab.MORE -> IconButton(onClick = onMoreSearchRequested) {
-                        Icon(
-                            Icons.Rounded.Search,
-                            contentDescription = stringResource(R.string.config_more_search),
-                        )
-                    }
+                    DashboardTab.MORE -> DashboardAction("search", R.string.config_more_search, onMoreSearchRequested)
                 }
             },
-            scrollBehavior = scrollBehavior,
         )
-        TabRowWithContour(
-            tabs = tabs,
-            selectedTabIndex = selectedTab.ordinal,
-            onTabSelected = ::selectTab,
-            modifier = Modifier
-                .featureGuideAnchor("config_tabs")
-                .fillMaxWidth()
-                .padding(
-                    top = 4.dp,
-                    start = 12.dp,
-                    end = 12.dp,
-                    bottom = 8.dp,
-                ),
+        ConfigSegmentedControl(
+            items = tabLabels,
+            selectedIndex = selectedTab.ordinal,
+            onSelect = ::selectTab,
+            modifier = Modifier.featureGuideAnchor("config_tabs"),
+            topPadding = 4.dp,
         )
-        BoxWithConstraints(
-            modifier = Modifier
-                .weight(1f)
-                .fillMaxWidth()
-                .nestedScroll(scrollBehavior.nestedScrollConnection),
-        ) {
-            val pageWidth = maxWidth
+        Box(Modifier.weight(1f).fillMaxWidth().clipToBounds()) {
             DashboardTab.entries.forEach { tab ->
                 if (tab != selectedTab && loadedTabMask and (1 shl tab.ordinal) == 0) return@forEach
                 key(tab) {
-                    val tabPosition by tabTransition.animateFloat(
-                        transitionSpec = {
-                            tween(durationMillis = 320, easing = FastOutSlowInEasing)
-                        },
-                        label = "${tab.name}Position",
-                    ) { selected ->
-                        when {
-                            tab.ordinal < selected.ordinal -> -1f
-                            tab.ordinal > selected.ordinal -> 1f
-                            else -> 0f
-                        }
-                    }
-                    val isTransitionPage =
-                        tab == tabTransition.currentState || tab == tabTransition.targetState
+                    val visible = tab == transition.currentState || tab == transition.targetState
+                    val progress = transition.animateFloat(
+                        transitionSpec = { spring(dampingRatio = .94f, stiffness = 480f) },
+                        label = "Tab visibility",
+                    ) { if (it == tab) 1f else 0f }
                     Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .zIndex(
-                                when (tab) {
-                                    tabTransition.targetState -> 1f
-                                    tabTransition.currentState -> 0.5f
-                                    else -> 0f
-                                }
-                            )
+                        Modifier.fillMaxSize()
+                            .zIndex(if (tab == selectedTab) 1f else 0f)
                             .graphicsLayer {
-                                alpha = if (isTransitionPage) 1f else 0f
-                                translationX = tabPosition * pageWidth.toPx()
-                            },
+                                alpha = progress.value.coerceIn(0f, 1f)
+                                translationX = (1f - alpha) * 18.dp.toPx()
+                            }
+                            .layout { measurable, constraints ->
+                            if (visible) {
+                                val page = measurable.measure(constraints)
+                                layout(page.width, page.height) { page.placeRelative(0, 0) }
+                            } else {
+                                layout(constraints.minWidth, constraints.minHeight) {}
+                            }
+                        },
                     ) {
                         when (tab) {
                             DashboardTab.CARDS -> cardContent(
@@ -274,8 +212,7 @@ internal fun ConfigDashboard(
                                 bottomPadding = contentPadding.calculateBottomPadding(),
                                 onOpenCategory = onOpenCategory,
                                 onOpenScriptManagement = onOpenScriptManagement,
-                                onOpenFavoriteCategory = onOpenFavoriteCategory,
-                                favoriteNodeCount = favoriteNodeCount,
+                                onOpenPresetPackDialog = onOpenPresetPackDialog,
                                 initialScrollIndex = moreScrollIndex,
                                 initialScrollOffset = moreScrollOffset,
                                 onScrollChanged = onMoreScrollChanged,
@@ -289,13 +226,19 @@ internal fun ConfigDashboard(
 }
 
 @Composable
+private fun DashboardAction(icon: String, @StringRes label: Int, onClick: () -> Unit) {
+    MochiBarIconButton(onClick = onClick) {
+        MochiIonicon(icon, contentDescription = stringResource(label))
+    }
+}
+
+@Composable
 private fun MoreTab(
     categories: List<MoreCategory>,
     bottomPadding: Dp,
     onOpenCategory: (ConfigCategory) -> Unit,
     onOpenScriptManagement: () -> Unit,
-    onOpenFavoriteCategory: () -> Unit,
-    favoriteNodeCount: Int,
+    onOpenPresetPackDialog: (() -> Unit)?,
     initialScrollIndex: Int,
     initialScrollOffset: Int,
     onScrollChanged: (Int, Int) -> Unit,
@@ -304,79 +247,65 @@ private fun MoreTab(
         initialFirstVisibleItemIndex = initialScrollIndex,
         initialFirstVisibleItemScrollOffset = initialScrollOffset,
     )
+    val saveScroll by rememberUpdatedState(onScrollChanged)
     LaunchedEffect(listState) {
-        snapshotFlow {
-            listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset
-        }.distinctUntilChanged().collect { (index, offset) ->
-            onScrollChanged(index, offset)
+        snapshotFlow { listState.isScrollInProgress }.collect { scrolling ->
+            if (!scrolling) saveScroll(listState.firstVisibleItemIndex, listState.firstVisibleItemScrollOffset)
         }
     }
-    LazyColumn(
-        state = listState,
-        modifier = Modifier
-            .fillMaxSize()
-            .overScrollVertical()
-            .scrollEndHaptic(),
-        contentPadding = PaddingValues(bottom = bottomPadding + 12.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        item(key = "more_favorites") {
-            MoreSurface {
-                ArrowPreference(
-                    title = stringResource(R.string.config_favorites_title),
-                    summary = if (favoriteNodeCount == 0) stringResource(R.string.config_favorites_empty)
-                    else stringResource(R.string.config_favorites_count, favoriteNodeCount),
-                    startAction = {
-                        Icon(
-                            Icons.Rounded.Favorite,
-                            contentDescription = null,
-                            tint = MiuixTheme.colorScheme.primary
-                        )
-                    },
-                    onClick = onOpenFavoriteCategory,
-                )
-            }
-        }
-        item(key = "more_script_management") {
-            MoreSurface {
-                ArrowPreference(
-                    title = stringResource(R.string.config_more_scripts_title),
-                    summary = stringResource(R.string.config_more_scripts_desc),
-                    startAction = {
-                        Icon(
-                            Icons.Rounded.Code,
-                            contentDescription = null,
-                            tint = MiuixTheme.colorScheme.primary
-                        )
-                    },
-                    onClick = onOpenScriptManagement,
-                )
-            }
-        }
-        items(categories, key = { it.group.id }) { entry ->
-            MoreSurface {
-                ArrowPreference(
-                    title = stringResource(entry.group.titleRes),
-                    summary = stringResource(entry.group.descriptionRes),
-                    startAction = {
-                        Icon(
-                            entry.group.icon,
-                            contentDescription = null,
-                            tint = MiuixTheme.colorScheme.primary,
-                        )
-                    },
-                    onClick = { onOpenCategory(entry.category) },
-                )
-            }
-        }
+    DisposableEffect(listState) {
+        onDispose { saveScroll(listState.firstVisibleItemIndex, listState.firstVisibleItemScrollOffset) }
     }
-}
 
-@Composable
-private fun MoreSurface(content: @Composable () -> Unit) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 12.dp),
-    ) { content() }
+    val spacing = 12.dp
+    val groupsTitle = stringResource(R.string.configuration_title)
+    CompositionLocalProvider(LocalMochiListItemSpacing provides spacing) {
+        ProvideMochiOverscroll {
+            LazyColumn(
+                state = listState,
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(
+                    start = ConfigUi.HorizontalInset, end = ConfigUi.HorizontalInset, top = 4.dp, bottom = bottomPadding + 16.dp,
+                ),
+                verticalArrangement = Arrangement.spacedBy(spacing),
+                flingBehavior = MochiScrollDefaults.flingBehavior(),
+            ) {
+                mochiListSection("more_tools") {
+                    if (onOpenPresetPackDialog != null) {
+                        row(key = "preset_pack") {
+                            MochiListRow(
+                                title = stringResource(R.string.preset_pack_title),
+                                subtitle = stringResource(R.string.preset_pack_summary),
+                                leading = { MochiIonicon("download") },
+                                onClick = onOpenPresetPackDialog,
+                                chevron = true,
+                            )
+                        }
+                    }
+                    row(key = "scripts") {
+                        MochiListRow(
+                            title = stringResource(R.string.config_more_scripts_title),
+                            subtitle = stringResource(R.string.config_more_scripts_desc),
+                            leading = { MochiIonicon("code-slash") },
+                            onClick = onOpenScriptManagement,
+                            chevron = true,
+                        )
+                    }
+                }
+                mochiListSection("more_categories", header = groupsTitle) {
+                    rows(categories, key = { it.group.id }) { entry ->
+                        MochiListRow(
+                            title = stringResource(entry.group.titleRes),
+                            subtitle = stringResource(entry.group.descriptionRes),
+                            leading = {
+                                Icon(entry.group.icon, contentDescription = null, modifier = Modifier.size(16.dp), tint = LocalContentColor.current)
+                            },
+                            onClick = { onOpenCategory(entry.category) },
+                            chevron = true,
+                        )
+                    }
+                }
+            }
+        }
+    }
 }

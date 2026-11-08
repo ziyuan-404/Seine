@@ -23,8 +23,6 @@ class MoreConfigGroupsTest {
         assertEquals(expectedKeys, assignedKeys.toSet())
         assertEquals(assignedKeys.size, assignedKeys.distinct().size)
         assertTrue((assignedKeys.toSet() - originalKeys.toSet()).isEmpty())
-        assertEquals(listOf(15, 5, 2, 10, 4, 5, 16, 1, 7), MoreConfigGroups.map { it.itemKeys.size })
-        assertEquals(8, MoreConfigGroups.map { it.icon }.distinct().size)
 
         val categories = buildMoreCategories(REAREyeConfig)
         val originalByKey = originalItems.associateBy { it.key }
@@ -39,7 +37,22 @@ class MoreConfigGroupsTest {
             group.itemKeys.map { key -> key to group.id }
         }.toMap()
 
-        assertEquals("apps_runtime", groupByKey[ConfigKeys.CFG_CUSTOM_BOUNDS_COMPAT_MANAGER])
+        val enhancement = MoreConfigGroups.first { it.id == "rear_enhancement" }
+        assertEquals(ConfigKeys.REAR_APP_ENABLED, enhancement.itemKeys.first())
+        assertEquals("rear_enhancement", groupByKey[ConfigKeys.ACTIVITIES_WHITELIST_APPS])
+        assertEquals("rear_apps", groupByKey[ConfigKeys.CFG_CUSTOM_BOUNDS_COMPAT_MANAGER])
+        assertEquals("rear_apps", groupByKey[ConfigKeys.REAR_SCREEN_TIMEOUT_SECONDS])
+        assertEquals("rear_apps", groupByKey[ConfigKeys.REAR_APP_DPI])
+
+        val notifications = MoreConfigGroups.first { it.id == "notifications_route" }
+        assertEquals(
+            listOf(
+                ConfigKeys.REAR_NOTIFICATION_SYNC,
+                ConfigKeys.REAR_NOTIFICATION_PRIVACY,
+                ConfigKeys.REAR_NOTIFICATION_FACE_AUTH_STYLE,
+            ),
+            notifications.itemKeys.take(3),
+        )
         listOf(
             ConfigKeys.HOOK_UNLIMITED_SUBSCREEN_APP_LIST,
             ConfigKeys.HOOK_UNLOCK_VIDEO_RESTRICTIONS,
@@ -52,7 +65,7 @@ class MoreConfigGroupsTest {
     @Test
     fun searchUsesOriginalTitleDescriptionAndNewCategoryTitle() {
         val categories = buildMoreCategories(REAREyeConfig)
-        val category = categories.first { it.group.id == "apps_runtime" }
+        val category = categories.first { it.group.id == "rear_enhancement" }
         val item = category.category.children.first {
             it.key == ConfigKeys.ALLOW_EXTERNAL_DISPLAY_LAUNCH
         } as ConfigItem

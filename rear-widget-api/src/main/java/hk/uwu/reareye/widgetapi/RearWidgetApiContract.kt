@@ -1,9 +1,9 @@
 package hk.uwu.reareye.widgetapi
 
 object RearWidgetApiContract {
-    const val SERVICE_PERMISSION = "hk.uwu.reareye.permission.ACCESS_REAR_WIDGET_API"
+    const val SERVICE_PERMISSION = "fr.uwu.Seine.permission.ACCESS_REAR_WIDGET_API"
     const val HOOK_HOST_PACKAGE = "com.xiaomi.subscreencenter"
-    const val ACTION_REQUEST_HOOK_SERVICE = "hk.uwu.reareye.widgetapi.REQUEST_HOOK_SERVICE"
+    const val ACTION_REQUEST_HOOK_SERVICE = "fr.uwu.Seine.widgetapi.REQUEST_HOOK_SERVICE"
 
     object Extras {
         const val BUNDLE = "bundle"

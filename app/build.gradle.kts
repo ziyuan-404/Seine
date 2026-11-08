@@ -15,7 +15,7 @@ val gitCommitCount: Int by lazy { runGitCommand("rev-list", "--count", "HEAD")?.
 val gitVersionCode: Int by lazy { 5 + gitCommitCount }
 val baseVersionName = gropify.project.app.versionName.replace("\"", "")
 val buildSuffix = project.findProperty("buildSuffix") as? String ?: "dev"
-val finalVersionName = "$baseVersionName-$buildSuffix"
+val finalVersionName = baseVersionName
 val isPublicBetaBuild = gradle.extra["isPublicBeta"] as? Boolean ?: false
 
 roxy {
@@ -82,10 +82,10 @@ android {
     }
 
     defaultConfig {
-        applicationId = gropify.project.app.packageName
+        applicationId = gropify.project.app.applicationId
         minSdk = gropify.project.android.minSdk
         targetSdk = gropify.project.android.targetSdk
-        versionName = gropify.project.app.versionName
+        versionName = baseVersionName
         versionCode = gitVersionCode
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("String", "BUILD_CHANNEL", "\"$buildSuffix\"")
@@ -144,7 +144,6 @@ android {
                 "proguard-rules.pro"
             )
             signingConfig = signingConfigs.getByName("release")
-            versionNameSuffix = gradle.extra["versionSuffix"].toString()
         }
     }
     compileOptions {
@@ -186,7 +185,7 @@ tasks.matching { it.name == "preBuild" || it.name.endsWith("Assets") }.configure
 
 tasks.register("assemblePublicBetaRelease") {
     group = "build"
-    description = "Assembles the public beta release without REAREye native hook libraries."
+    description = "Assembles the public beta release without Seine native hook libraries."
     dependsOn("assembleRelease")
 }
 
@@ -196,7 +195,7 @@ androidComponents {
         val exportApk = tasks.register<Sync>("export${variantName}Apk") {
             from(variant.artifacts.get(SingleArtifact.APK))
             include("*arm64-v8a*.apk")
-            rename { "REAREye-v${finalVersionName}.apk" }
+            rename { "Seine-v${finalVersionName}.apk" }
             into(layout.buildDirectory.dir("outputs/renamed-apk/${variant.name}"))
         }
 
@@ -375,6 +374,10 @@ dependencies {
     implementation(libs.markdown.coil3)
     implementation(libs.coil.network.okhttp)
     implementation(libs.miuix.ui)
+    implementation(project(":mochi-patched"))
+    implementation(libs.mochi.icons) {
+        exclude(group = "io.github.feice11", module = "mochi-compose")
+    }
     implementation(libs.miuix.preference)
     implementation(libs.miuix.icons)
     implementation(libs.miuix.blur)

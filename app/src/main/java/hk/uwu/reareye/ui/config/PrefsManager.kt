@@ -1,6 +1,7 @@
 package hk.uwu.reareye.ui.config
 
 import android.content.Context
+import hk.uwu.reareye.BuildConfig
 import hk.uwu.reareye.hook.support.HookPrefs
 import hk.uwu.reareye.hook.support.REMOTE_PREFS_GROUP
 import hk.uwu.reareye.hook.support.XposedRemoteHookPrefs
@@ -96,7 +97,7 @@ class PrefsManager(
 
         /** 返回项目 UI 与 HookRuntime 共用的逻辑偏好组名。 */
         fun defaultPrefsName(packageName: String): String {
-            require(packageName == "hk.uwu.reareye") {
+            require(packageName == BuildConfig.APPLICATION_ID) {
                 "Unexpected module package name: $packageName"
             }
             return DEFAULT_PREFS_NAME

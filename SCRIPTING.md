@@ -1,13 +1,13 @@
-# REAREye Scripting API
+# Seine Scripting API
 
-本文档面向 REAREye 脚本、组件和 Provider 开发者。当前脚本语言为 LuaJIT，脚本入口返回一个描述表，用于注册
+本文档面向 Seine 脚本、组件和 Provider 开发者。当前脚本语言为 LuaJIT，脚本入口返回一个描述表，用于注册
 Provider 和配置项。
 
 ## 最小脚本
 
 `lua
 local function hello(params, config, context)
-return "Hello " .. tostring(params.name or "REAREye")
+return "Hello " .. tostring(params.name or "Seine")
 end
 
 return {
@@ -27,7 +27,7 @@ function(params, config, context) -> any
 
 - params：调用方传入的参数表。
 - config：根据 configs 声明并归一化后的配置表。
-- context：REAREye 注入的运行时工具对象。
+- context：Seine 注入的运行时工具对象。
 - 返回值：字符串、数字、布尔值、数组或键为字符串的表。
 
 ## 脚本描述表
@@ -175,12 +175,12 @@ local result = context.root:exec("cat", {
 - timedOut：是否因为超时被终止。
 - outputLimitExceeded：输出是否超过宿主限制。
 
-Root 能力依赖用户在 Root 管理器中授予 REAREye 权限。默认超时为 10 秒，可设置范围为 100 到 120000
+Root 能力依赖用户在 Root 管理器中授予 Seine 权限。默认超时为 10 秒，可设置范围为 100 到 120000
 毫秒。标准输出和标准错误分别有大小上限。
 
 ## HTTP 客户端
 
-LuaJIT 本身不带 HTTP 客户端。REAREye 在 Android 宿主中使用 OkHttp 提供
+LuaJIT 本身不带 HTTP 客户端。Seine 在 Android 宿主中使用 OkHttp 提供
 context.http，支持请求方法、查询参数、请求头、请求体、超时、重定向和完整响应信息。
 
 ### context.http:request(request)
@@ -195,7 +195,7 @@ lang = "zh-CN",
 },
 headers = {
 ["Accept"] = "application/json",
-["User-Agent"] = "REAREye-Script/1.0",
+["User-Agent"] = "Seine-Script/1.0",
 },
 timeoutMillis = 15000,
 followRedirects = true,
@@ -245,7 +245,7 @@ local e = context.http:delete(url, options)
 `lua
 local response = context.http:post(
     "https://api.example.com/items",
-    '{"name":"REAREye"}',
+    '{"name":"Seine"}',
     {
         headers = {
             ["Content-Type"] = "application/json",
@@ -274,13 +274,13 @@ require("a.b") 会依次查找 a/b.lua 和 a/b/init.lua。模块名只允许 Lua
 应用内调试页会直接执行 Provider。外部组件也可以通过 ContentProvider 查询：
 
 `text
-content://hk.uwu.reareye.script/{projectId}/{providerId}?name=REAREye
+content://fr.uwu.Seine.script/{projectId}/{providerId}?name=Seine
 `
 
 也可以使用查询参数指定项目和 Provider：
 
 `text
-content://hk.uwu.reareye.script/run?project=my_project&provider=hello&name=REAREye
+content://fr.uwu.Seine.script/run?project=my_project&provider=hello&name=Seine
 `
 
 返回列：project_id、provider_id、mime_type、data、error、elapsed_millis。

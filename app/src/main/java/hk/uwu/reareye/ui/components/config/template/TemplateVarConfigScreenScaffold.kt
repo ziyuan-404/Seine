@@ -1,6 +1,7 @@
 package hk.uwu.reareye.ui.components.config.template
 
 import androidx.activity.compose.BackHandler
+import hk.uwu.reareye.ui.components.config.LocalConfigOwnsBack
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -79,7 +80,7 @@ fun <TSchema, TConfig> TemplateVarConfigScreenScaffold(
         modifier.rearAcrylicSource(hazeState)
     }
 
-    BackHandler(onBack = onBack)
+    BackHandler(enabled = !LocalConfigOwnsBack.current, onBack = onBack)
 
     val screenContent: @Composable (PaddingValues) -> Unit = { paddingValues ->
         when {

@@ -17,6 +17,8 @@ import android.os.Process
 import android.util.Base64
 import android.view.View
 import androidx.core.content.ContextCompat
+import hk.uwu.reareye.hook.support.REAR_API_PERMISSION
+import hk.uwu.reareye.BuildConfig
 import hk.uwu.reareye.hook.scopes.subscreencenter.modules.SubscreenWidgetOffscreenRenderer
 import hk.uwu.reareye.hook.scopes.subscreencenter.modules.SubscreenWidgetRenderHostRegistry
 import hk.uwu.reareye.hook.scopes.subscreencenter.modules.SubscreenWidgetRuntimeController
@@ -58,7 +60,7 @@ import java.util.function.Consumer
 class RearAppHook : RoxyHooker() {
     companion object {
         private const val TAG = "REAREye-RearApp"
-        private const val REAREYE_PACKAGE = "hk.uwu.reareye"
+        private const val REAREYE_PACKAGE = BuildConfig.APPLICATION_ID
         private const val OWNED_ID_PREFIX = "reareye_app_v1_"
         private const val REMOVED_ACTION = "miui.intent.action.APP_CARD_REMOVED"
         private const val LOAD_TIMEOUT_MS = 2500L
@@ -661,7 +663,7 @@ class RearAppHook : RoxyHooker() {
                 registrationContext,
                 hookBootstrapReceiver,
                 IntentFilter(RearAppApiContract.ACTION_REQUEST_HOOK_SERVICE),
-                RearAppApiContract.SERVICE_PERMISSION,
+                REAR_API_PERMISSION,
                 null,
                 ContextCompat.RECEIVER_EXPORTED,
             )
@@ -675,13 +677,13 @@ class RearAppHook : RoxyHooker() {
         if (uid == Process.myUid()) return
         if (context == null) throw SecurityException("context not ready for permission check")
         val granted = context.checkPermission(
-            RearAppApiContract.SERVICE_PERMISSION,
+            REAR_API_PERMISSION,
             Binder.getCallingPid(),
             uid,
         ) == PackageManager.PERMISSION_GRANTED
         if (!granted) {
             throw SecurityException(
-                "caller uid=$uid requires ${RearAppApiContract.SERVICE_PERMISSION}"
+                "caller uid=$uid requires ${REAR_API_PERMISSION}"
             )
         }
     }

@@ -1,6 +1,7 @@
 package hk.uwu.reareye.ui.components.config
 
 import android.annotation.SuppressLint
+import android.widget.Toast
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -9,24 +10,27 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import hk.uwu.reareye.R
+import hk.uwu.reareye.ui.components.SeineMenuDefaults
 import hk.uwu.reareye.ui.components.rememberPackageIconBitmap
 import hk.uwu.reareye.ui.config.ConfigCategory
 import hk.uwu.reareye.ui.config.ConfigCategoryIcon
@@ -36,30 +40,30 @@ import hk.uwu.reareye.ui.config.ConfigKeys
 import hk.uwu.reareye.ui.config.ConfigNode
 import hk.uwu.reareye.ui.config.ConfigType
 import hk.uwu.reareye.ui.config.ModuleSettingsController
+import hk.uwu.reareye.ui.config.RearNotificationDefaults
 import hk.uwu.reareye.ui.config.PrefsManager
 import hk.uwu.reareye.ui.config.StoreApiProvider
 import hk.uwu.reareye.ui.config.normalizeRearStoreCustomDomainInput
 import hk.uwu.reareye.ui.config.rememberRemotePrefsStatusRevision
 import hk.uwu.reareye.ui.config.validateRearStoreCustomDomain
+import kotlin.math.roundToInt
+import kotlinx.collections.immutable.toPersistentList
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import top.yukonga.miuix.kmp.basic.DropdownDefaults
-import top.yukonga.miuix.kmp.basic.DropdownImpl
-import top.yukonga.miuix.kmp.basic.DropdownItem
+import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.Icon
-import top.yukonga.miuix.kmp.basic.ListPopupColumn
-import top.yukonga.miuix.kmp.basic.ListPopupDefaults
-import top.yukonga.miuix.kmp.basic.PopupPositionProvider
-import top.yukonga.miuix.kmp.basic.Slider
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextField
-import top.yukonga.miuix.kmp.basic.Button
-import top.yukonga.miuix.kmp.overlay.OverlayListPopup
-import top.yukonga.miuix.kmp.preference.ArrowPreference
-import top.yukonga.miuix.kmp.preference.SwitchPreference
 import top.yukonga.miuix.kmp.theme.MiuixTheme
-import kotlin.math.roundToInt
+import top.yukonga.miuix.kmp.basic.Slider
+import top.yukonga.miuix.kmp.basic.Switch
+import ui.feice.mochi.basic.MochiDropdown
+import ui.feice.mochi.basic.MochiItem
+import ui.feice.mochi.icons.MochiIonicon
+import ui.feice.mochi.list.MochiListLeadingStyle
+import ui.feice.mochi.list.MochiListRow
+import ui.feice.mochi.theme.LocalContentColor
 
 @Composable
 fun ConfigNodeRow(
@@ -90,10 +94,12 @@ fun ConfigNodeRow(
 
 @Composable
 fun ConfigCategoryNodeRow(category: ConfigCategory, onClick: () -> Unit) {
-    ArrowPreference(
+    MochiListRow(
         title = stringResource(category.titleRes),
-        summary = category.descriptionRes?.let { stringResource(it) },
-        startAction = category.icon?.let { icon ->
+        subtitle = category.descriptionRes?.let { stringResource(it) },
+        chevron = true,
+        leadingStyle = MochiListLeadingStyle.Symbol,
+        leading = category.icon?.let { icon ->
             {
                 ConfigCategoryStartIcon(icon = icon)
             }
@@ -110,7 +116,7 @@ private fun ConfigCategoryStartIcon(icon: ConfigCategoryIcon) {
                 Icon(
                     imageVector = icon.imageVector,
                     contentDescription = null,
-                    tint = MiuixTheme.colorScheme.onBackground,
+                    tint = LocalContentColor.current,
                     modifier = Modifier.size(22.dp)
                 )
             }
@@ -146,6 +152,10 @@ fun ConfigItemNodeRow(
     onOpenManager: (ConfigItem) -> Unit,
     onPreferenceChanged: (ConfigItem) -> Unit = {},
 ) {
+    if (item.key == ConfigKeys.MODULE_MOCHI_PALETTE_STYLE) {
+        MochiColorsConfigInput(item, prefsManager, onPreferenceChanged)
+        return
+    }
     item.type.RenderInput(
         item = item,
         prefsManager = prefsManager,
@@ -163,11 +173,19 @@ fun BooleanConfigInput(
     onPreferenceChanged: (ConfigItem) -> Unit = {},
 ) {
     val context = LocalContext.current
+    if (item.key == ConfigKeys.REAR_NOTIFICATION_PRIVACY) {
+        NativeNotificationPrivacyInput(item)
+        return
+    }
+    if (item.key == ConfigKeys.REAR_APP_FACE_AUTH) {
+        FaceAuthConfigInput(item, defaultValue, prefsManager, onPreferenceChanged)
+        return
+    }
     val checked = remember(item.key) {
         mutableStateOf(prefsManager.getBoolean(item.key, defaultValue))
     }
 
-    SwitchPreference(
+    ConfigSwitchRow(
         title = stringResource(item.titleRes),
         summary = item.descriptionRes?.let { stringResource(it) },
         checked = checked.value,
@@ -183,12 +201,32 @@ fun BooleanConfigInput(
 }
 
 @Composable
+internal fun ConfigSwitchRow(
+    title: String,
+    checked: Boolean,
+    summary: String? = null,
+    enabled: Boolean = true,
+    onCheckedChange: (Boolean) -> Unit,
+) {
+    MochiListRow(
+        title = title,
+        subtitle = summary,
+        enabled = enabled,
+        onClick = { onCheckedChange(!checked) },
+        trailing = {
+            Switch(checked = checked, enabled = enabled, onCheckedChange = onCheckedChange)
+        },
+    )
+}
+
+@Composable
 fun AppListConfigInput(
     item: ConfigItem,
     defaultValues: Set<String>,
     prefsManager: PrefsManager,
     onClick: () -> Unit,
 ) {
+    val context = LocalContext.current
     val remotePrefsStatusRevision = rememberRemotePrefsStatusRevision()
     var selectedCount by remember(item.key) { mutableIntStateOf(0) }
     var selectionReady by remember(item.key) { mutableStateOf(false) }
@@ -200,7 +238,10 @@ fun AppListConfigInput(
             return@LaunchedEffect
         }
         selectedCount = withContext(Dispatchers.IO) {
-            prefsManager.getStringSet(item.key, defaultValues).size
+            val selected = prefsManager.getStringSet(item.key, defaultValues)
+            if (item.key == ConfigKeys.REAR_NOTIFICATION_SYNC_APPS) {
+                RearNotificationDefaults.resolve(selected, context.packageManager).size
+            } else selected.size
         }
         selectionReady = true
     }
@@ -211,15 +252,11 @@ fun AppListConfigInput(
         stringResource(R.string.rear_widget_loading_data)
     }
     val description = item.descriptionRes?.let { stringResource(it) }
-    val summary = if (description.isNullOrBlank()) {
-        selectedSummary
-    } else {
-        "$description\n$selectedSummary"
-    }
-
-    ArrowPreference(
+    val summary = if (description.isNullOrBlank()) selectedSummary else "$description\n$selectedSummary"
+    MochiListRow(
         title = stringResource(item.titleRes),
-        summary = summary,
+        subtitle = summary,
+        chevron = true,
         onClick = onClick
     )
 }
@@ -243,9 +280,6 @@ fun MaskMultiSelectConfigInput(
     val optionTitles = remember(item.key, options, configuration) {
         options.map { context.getString(it.titleRes) }
     }
-    val optionEntries = remember(item.key, optionTitles) {
-        optionTitles.map { DropdownItem(title = it) }
-    }
 
     val selectedLabels = options
         .mapIndexedNotNull { index, option ->
@@ -258,54 +292,23 @@ fun MaskMultiSelectConfigInput(
         selectedLabels.joinToString(separator = " / ")
     }
     val description = item.descriptionRes?.let { stringResource(it) }
-    val summary = if (description.isNullOrBlank()) {
-        selectedSummary
-    } else {
-        "$description\n$selectedSummary"
-    }
-
-    Box {
-        ArrowPreference(
-            title = stringResource(item.titleRes),
-            summary = summary,
-            holdDownState = showModePopup.value,
-            onClick = { showModePopup.value = true }
-        )
-
-        OverlayListPopup(
-            show = showModePopup.value,
-            popupModifier = Modifier,
-            popupPositionProvider = ListPopupDefaults.DropdownPositionProvider,
-            alignment = PopupPositionProvider.Align.End,
-            enableWindowDim = true,
-            onDismissRequest = { showModePopup.value = false },
-            maxHeight = null,
-            minWidth = 220.dp,
-            renderInRootScaffold = true,
-        ) {
-            ListPopupColumn {
-                options.forEachIndexed { index, option ->
-                    DropdownImpl(
-                        item = optionEntries[index],
-                        optionSize = options.size,
-                        isSelected = (selectedMask and option.maskValue) != 0,
-                        index = index,
-                        dropdownColors = DropdownDefaults.dropdownColors(),
-                        onSelectedIndexChange = {
-                            val nextMask = selectedMask xor option.maskValue
-                            showModePopup.value = false
-                            popupScope.launch {
-                                withFrameNanos { }
-                                selectedMask = nextMask
-                                prefsManager.putInt(item.key, selectedMask)
-                                onPreferenceChanged(item)
-                            }
-                        },
-                    )
-                }
+    ConfigDropdownRow(
+        title = stringResource(item.titleRes),
+        summary = description,
+        currentLabel = selectedSummary,
+        labels = optionTitles,
+        checkedIndices = options.indices.filter { (selectedMask and options[it].maskValue) != 0 }.toSet(),
+        expanded = showModePopup.value,
+        onExpandedChange = { showModePopup.value = it },
+        onSelected = { index ->
+            popupScope.launch {
+                withFrameNanos { }
+                selectedMask = selectedMask xor options[index].maskValue
+                prefsManager.putInt(item.key, selectedMask)
+                onPreferenceChanged(item)
             }
-        }
-    }
+        },
+    )
 }
 
 @SuppressLint("LocalContextGetResourceValueCall")
@@ -341,7 +344,7 @@ fun DensityDpiConfigInput(
             Text(stringResource(it), color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                 modifier = Modifier.padding(top = 4.dp))
         }
-        SwitchPreference(
+        ConfigSwitchRow(
             title = stringResource(R.string.rear_app_dpi_system),
             checked = value == 0,
             onCheckedChange = { save(if (it) 0 else defaultValue) },
@@ -378,21 +381,24 @@ fun EnumSingleSelectConfigInput(
     val configuration = LocalConfiguration.current
     val popupScope = rememberCoroutineScope()
     val showEnumPopup = remember(item.key) { mutableStateOf(false) }
-    var selectedValue by remember(item.key) {
-        mutableIntStateOf(prefsManager.getInt(item.key, defaultValue))
+    fun readValue(): Int {
+        val fallback = when (item.key) {
+            ConfigKeys.REAR_APP_FACE_AUTH_STYLE, ConfigKeys.REAR_NOTIFICATION_FACE_AUTH_STYLE ->
+                prefsManager.getInt(ConfigKeys.REAR_FACE_AUTH_STYLE, defaultValue)
+            else -> defaultValue
+        }
+        return prefsManager.getInt(item.key, fallback)
     }
+    var selectedValue by remember(item.key) { mutableIntStateOf(readValue()) }
     val remoteRevision = rememberRemotePrefsStatusRevision()
-    var edited by remember(item.key) { mutableStateOf(false) }
+    var saving by remember(item.key) { mutableStateOf(false) }
     LaunchedEffect(remoteRevision) {
-        if (!edited && prefsManager.isRemoteReady()) {
-            selectedValue = prefsManager.getInt(item.key, defaultValue)
+        if (!saving && prefsManager.isRemoteReady()) {
+            selectedValue = readValue()
         }
     }
     val optionTitles = remember(item.key, options, configuration) {
         options.map { context.getString(it.titleRes) }
-    }
-    val optionEntries = remember(item.key, optionTitles) {
-        optionTitles.map { DropdownItem(title = it) }
     }
 
     val selectedLabel = options
@@ -401,54 +407,40 @@ fun EnumSingleSelectConfigInput(
         ?.let { optionTitles[it] }
         ?: optionTitles.firstOrNull().orEmpty()
     val description = item.descriptionRes?.let { stringResource(it) }
-    val summary = if (description.isNullOrBlank()) {
-        selectedLabel
-    } else {
-        "$description\n$selectedLabel"
-    }
-
-    Box {
-        ArrowPreference(
-            title = stringResource(item.titleRes),
-            summary = summary,
-            holdDownState = showEnumPopup.value,
-            onClick = { showEnumPopup.value = true }
-        )
-
-        OverlayListPopup(
-            show = showEnumPopup.value,
-            popupModifier = Modifier,
-            popupPositionProvider = ListPopupDefaults.DropdownPositionProvider,
-            alignment = PopupPositionProvider.Align.End,
-            enableWindowDim = true,
-            onDismissRequest = { showEnumPopup.value = false },
-            maxHeight = null,
-            minWidth = 220.dp,
-            renderInRootScaffold = true,
-        ) {
-            ListPopupColumn {
-                options.forEachIndexed { index, option ->
-                    DropdownImpl(
-                        item = optionEntries[index],
-                        optionSize = options.size,
-                        isSelected = selectedValue == option.value,
-                        index = index,
-                        dropdownColors = DropdownDefaults.dropdownColors(),
-                        onSelectedIndexChange = {
-                            showEnumPopup.value = false
-                            popupScope.launch {
-                                withFrameNanos { }
-                                selectedValue = option.value
-                                  edited = true
-                                prefsManager.putInt(item.key, selectedValue)
-                                onPreferenceChanged(item)
+    ConfigDropdownRow(
+        title = stringResource(item.titleRes),
+        summary = description,
+        currentLabel = selectedLabel,
+        labels = optionTitles,
+        selectedIndex = options.indexOfFirst { it.value == selectedValue },
+        expanded = showEnumPopup.value,
+        onExpandedChange = { showEnumPopup.value = it },
+        onSelected = { index ->
+            if (!saving && index in options.indices) {
+                saving = true
+                val value = options[index].value
+                popupScope.launch {
+                    val committed = withContext(Dispatchers.IO) {
+                        runCatching {
+                            val editor = prefsManager.prefs.edit().putInt(item.key, value)
+                            if (item.key == ConfigKeys.MODULE_THEME_MODE) {
+                                editor.remove(ConfigKeys.MODULE_MOCHI_COLOR_MODE)
                             }
-                        },
-                    )
+                            editor.commit()
+                        }
+                            .getOrDefault(false)
+                    }
+                    saving = false
+                    if (committed) {
+                        selectedValue = value
+                        onPreferenceChanged(item)
+                    } else {
+                        Toast.makeText(context, R.string.seine_setting_save_failed, Toast.LENGTH_SHORT).show()
+                    }
                 }
             }
-        }
-    }
+        },
+    )
 }
 
 @SuppressLint("LocalContextGetResourceValueCall")
@@ -474,19 +466,14 @@ fun RearStoreApiConfigInput(
     val optionTitles = remember(configuration) {
         StoreApiProvider.selectableEntries.map { context.getString(it.titleRes) }
     }
-    val optionEntries = remember(optionTitles) {
-        optionTitles.map { DropdownItem(title = it) }
-    }
     val selectedLabel = optionTitles[StoreApiProvider.selectableEntries.indexOf(provider)]
     val description = item.descriptionRes?.let { stringResource(it) }
     val summary = buildString {
         if (!description.isNullOrBlank()) {
             append(description)
-            append('\n')
+            if (provider == StoreApiProvider.CUSTOM && validation != null) append('\n')
         }
-        append(selectedLabel)
         if (provider == StoreApiProvider.CUSTOM && validation != null) {
-            append('\n')
             append(validation.baseUrl)
         }
     }
@@ -502,47 +489,23 @@ fun RearStoreApiConfigInput(
     }
 
     Column(modifier = Modifier.fillMaxWidth()) {
-        Box {
-            ArrowPreference(
-                title = stringResource(item.titleRes),
-                summary = summary,
-                holdDownState = showApiPopup.value,
-                onClick = { showApiPopup.value = true },
-            )
-
-            OverlayListPopup(
-                show = showApiPopup.value,
-                popupModifier = Modifier,
-                popupPositionProvider = ListPopupDefaults.DropdownPositionProvider,
-                alignment = PopupPositionProvider.Align.End,
-                enableWindowDim = true,
-                onDismissRequest = { showApiPopup.value = false },
-                maxHeight = null,
-                minWidth = 220.dp,
-                renderInRootScaffold = true,
-            ) {
-                ListPopupColumn {
-                    StoreApiProvider.selectableEntries.forEachIndexed { index, option ->
-                        DropdownImpl(
-                            item = optionEntries[index],
-                            optionSize = StoreApiProvider.selectableEntries.size,
-                            isSelected = provider == option,
-                            index = index,
-                            dropdownColors = DropdownDefaults.dropdownColors(),
-                            onSelectedIndexChange = {
-                                showApiPopup.value = false
-                                popupScope.launch {
-                                    withFrameNanos { }
-                                    selectedProviderValue = option.value
-                                    prefsManager.putInt(item.key, selectedProviderValue)
-                                    onPreferenceChanged(item)
-                                }
-                            },
-                        )
-                    }
+        ConfigDropdownRow(
+            title = stringResource(item.titleRes),
+            summary = summary,
+            currentLabel = selectedLabel,
+            labels = optionTitles,
+            selectedIndex = StoreApiProvider.selectableEntries.indexOf(provider),
+            expanded = showApiPopup.value,
+            onExpandedChange = { showApiPopup.value = it },
+            onSelected = { index ->
+                popupScope.launch {
+                    withFrameNanos { }
+                    selectedProviderValue = StoreApiProvider.selectableEntries[index].value
+                    prefsManager.putInt(item.key, selectedProviderValue)
+                    onPreferenceChanged(item)
                 }
-            }
-        }
+            },
+        )
 
         if (provider == StoreApiProvider.CUSTOM) {
             Column(
@@ -620,9 +583,11 @@ fun FloatSliderConfigInput(
             value = selectedValue,
             onValueChange = {
                 val normalizedValue = sliderConfig.normalizeValue(it)
-                selectedValue = normalizedValue
-                prefsManager.putFloat(item.key, normalizedValue)
-                onPreferenceChanged(item)
+                if (selectedValue != normalizedValue) {
+                    selectedValue = normalizedValue
+                    prefsManager.putFloat(item.key, normalizedValue)
+                    onPreferenceChanged(item)
+                }
             },
             modifier = Modifier
                 .fillMaxWidth()
@@ -648,9 +613,61 @@ fun FloatSliderConfigInput(
 
 @Composable
 fun ManagerConfigInput(item: ConfigItem, onClick: () -> Unit) {
-    ArrowPreference(
+    MochiListRow(
         title = stringResource(item.titleRes),
-        summary = item.descriptionRes?.let { stringResource(it) },
+        subtitle = item.descriptionRes?.let { stringResource(it) },
+        chevron = true,
         onClick = onClick,
+    )
+}
+
+@Composable
+internal fun ConfigDropdownRow(
+    title: String,
+    summary: String?,
+    currentLabel: String,
+    labels: List<String>,
+    expanded: Boolean,
+    onExpandedChange: (Boolean) -> Unit,
+    onSelected: (Int) -> Unit,
+    selectedIndex: Int = -1,
+    checkedIndices: Set<Int> = emptySet(),
+) {
+    val items = remember(labels, checkedIndices) {
+        labels.mapIndexed { index, label ->
+            MochiItem(
+                label = label,
+                icon = if (index in checkedIndices) {
+                    { tint -> MochiIonicon("checkmark", tint = tint, size = 18.dp) }
+                } else null,
+            )
+        }.toPersistentList()
+    }
+    MochiListRow(
+        title = title,
+        subtitle = summary?.takeIf { it.isNotBlank() },
+        trailing = {
+            MochiDropdown(
+                expanded = expanded,
+                onExpandedChange = onExpandedChange,
+                items = items,
+                onItemClick = onSelected,
+                enabled = items.isNotEmpty(),
+                selectedIndex = selectedIndex,
+                behavior = SeineMenuDefaults.Trailing,
+                menuWidth = 300.dp,
+            ) {
+                Text(
+                    text = currentLabel,
+                    color = LocalContentColor.current,
+                    modifier = Modifier.widthIn(max = 112.dp),
+                    fontSize = 13.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Spacer(Modifier.size(6.dp))
+                MochiIonicon(if (expanded) "chevron-up" else "chevron-down", size = 14.dp)
+            }
+        },
     )
 }

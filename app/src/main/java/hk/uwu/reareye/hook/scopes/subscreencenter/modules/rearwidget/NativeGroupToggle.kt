@@ -11,6 +11,11 @@ import android.widget.TextView
 
 /** Two real text views, clipped to one line, so labels roll through the same slot. */
 internal class NativeGroupToggle(context: Context, private val count: Int, expanded: Boolean) : TextSwitcher(context) {
+    companion object {
+        const val HEIGHT_DP = 36
+        const val BOTTOM_MARGIN_DP = 12
+        fun hintCenter(height: Float, density: Float) = height - (BOTTOM_MARGIN_DP + HEIGHT_DP / 2f) * density
+    }
     private var expanded = expanded
     init {
         tag = "rear_notification_group_toggle"

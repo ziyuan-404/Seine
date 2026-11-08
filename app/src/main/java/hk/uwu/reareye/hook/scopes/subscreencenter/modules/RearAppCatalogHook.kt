@@ -17,6 +17,7 @@ import hk.uwu.reareye.hook.utils.resolveDexKitClassValue
 import hk.uwu.reareye.hook.utils.resolveDexKitMethodInjectionPoint
 import hk.uwu.reareye.hook.utils.resolveHookPackageVersionCode
 import hk.uwu.reareye.ui.config.ConfigKeys
+import hk.uwu.reareye.ui.config.RearAppDefaults
 import hk.uwu.roxyhook.PackageScope
 import hk.uwu.roxyhook.RoxyHooker
 import hk.uwu.roxyhook.HotReloadPolicy
@@ -139,10 +140,10 @@ class RearAppCatalogHook : RoxyHooker() {
                     val result = ArrayList<Any?>(source.filterNot { item ->
                         item != null && shortcutPackage(item)!=null
                     })
-                    if (!active || !hookPrefs.getBoolean(ConfigKeys.REAR_APP_ENABLED, false)) return result
+                    if (!active || !hookPrefs.getBoolean(ConfigKeys.REAR_APP_ENABLED, RearAppDefaults.ENABLED)) return result
                     val context = hookSystemContext
                     val pm = context.packageManager
-                    val selectedSet = hookPrefs.getStringSet(ConfigKeys.ACTIVITIES_WHITELIST_APPS)
+                    val selectedSet = hookPrefs.getStringSet(ConfigKeys.ACTIVITIES_WHITELIST_APPS, RearAppDefaults.ALLOWED_APPS)
                     val savedOrder = hookPrefs.getString(ConfigKeys.REAR_APP_ORDER_DATA)
                         .split('\n').map(String::trim).filter { it.isNotBlank() }
                     val selectionOrder = savedOrder.filter { it in selectedSet } +
@@ -223,7 +224,7 @@ class RearAppCatalogHook : RoxyHooker() {
                             it.parameterCount==2&&ViewGroup::class.java.isAssignableFrom(it.parameterTypes[0])&&it.parameterTypes[1]==Int::class.javaPrimitiveType&&!it.isBridge
                         }.apply { isAccessible=true }
                         val bindHolder=bind.apply { isAccessible=true }
-                        fun honeycomb()=active&&hookPrefs.getBoolean(ConfigKeys.REAR_APP_ENABLED,false)&&hookPrefs.getInt(ConfigKeys.REAR_APP_HOME_STYLE,0)==1
+                        fun honeycomb()=active&&hookPrefs.getBoolean(ConfigKeys.REAR_APP_ENABLED, RearAppDefaults.ENABLED)&&hookPrefs.getInt(ConfigKeys.REAR_APP_HOME_STYLE,0)==1
                         fun groups(list: List<*>):List<IntRange> {
                             val result=ArrayList<IntRange>()
                             var start=0
@@ -331,6 +332,7 @@ class RearAppCatalogHook : RoxyHooker() {
                                             val click=info?.javaClass?.getDeclaredField("mOnClickListener")?.apply { isAccessible=true }?.get(info) as? View.OnClickListener
                                             val launch=intentField.get(item) as? Intent
                                             val appShortcut=shortcutPackage(item)!=null
+                                            shortcutPackage(item)?.let { NativeRearAppLaunch.registerPickerOrigin(it, nativeView) }
                                             nativeView.setOnClickListener { actual ->
                                                 runCatching {
                                                     if(appShortcut&&launch!=null)NativeRearAppLaunch.open(actual,launch,hookPrefs)
@@ -365,6 +367,7 @@ class RearAppCatalogHook : RoxyHooker() {
                                     return@after
                                 }
                                 if(pkg==null)return@after
+                                NativeRearAppLaunch.registerPickerOrigin(pkg, view)
                                 val launch=intentField.get(model) as? Intent
                                 if(launch!=null)view.setOnClickListener { actual ->
                                     runCatching { NativeRearAppLaunch.open(actual,launch,hookPrefs) }.onFailure { YLog.warn("Native rear app launch failed",it) }
@@ -419,7 +422,7 @@ class RearAppCatalogHook : RoxyHooker() {
                                 // launch activities. Rebuild once they become available.
                                 val context=hostContext?:return
                                 val unlocked=context.getSystemService(android.os.UserManager::class.java)?.isUserUnlocked==true
-                                val next=listOf(hookPrefs.getBoolean(ConfigKeys.REAR_APP_ENABLED,false),hookPrefs.getInt(ConfigKeys.REAR_APP_HOME_STYLE,0),hookPrefs.getStringSet(ConfigKeys.ACTIVITIES_WHITELIST_APPS),hookPrefs.getInt(ConfigKeys.REAR_APP_ORDER_MODE,0),hookPrefs.getString(ConfigKeys.REAR_APP_ORDER_DATA),unlocked)
+                                val next=listOf(hookPrefs.getBoolean(ConfigKeys.REAR_APP_ENABLED, RearAppDefaults.ENABLED),hookPrefs.getInt(ConfigKeys.REAR_APP_HOME_STYLE,0),hookPrefs.getStringSet(ConfigKeys.ACTIVITIES_WHITELIST_APPS, RearAppDefaults.ALLOWED_APPS),hookPrefs.getInt(ConfigKeys.REAR_APP_ORDER_MODE,0),hookPrefs.getString(ConfigKeys.REAR_APP_ORDER_DATA),unlocked)
                                 if(next!=last) { last=next;refreshAdapters() }
                                 if(preferenceSubscription==null)preferenceSubscription=hookPrefs.observe { key ->
                                     if(key==null||key in setOf(ConfigKeys.REAR_APP_ENABLED,ConfigKeys.REAR_APP_HOME_STYLE,ConfigKeys.ACTIVITIES_WHITELIST_APPS,ConfigKeys.REAR_APP_ORDER_MODE,ConfigKeys.REAR_APP_ORDER_DATA)) {

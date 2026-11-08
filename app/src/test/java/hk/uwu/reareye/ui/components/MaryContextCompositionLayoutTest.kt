@@ -23,7 +23,7 @@ import androidx.compose.ui.test.junit4.v2.createEmptyComposeRule
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.width
 import androidx.compose.ui.unit.height
-import com.kyant.backdrop.backdrops.rememberLayerBackdrop
+import ui.feice.mochi.effect.glass.rememberMochiBackdrop
 import hk.uwu.reareye.agent.provider.ChatEvent
 import hk.uwu.reareye.agent.ProviderConfig
 import hk.uwu.reareye.agent.context.ContextCategory
@@ -556,7 +556,7 @@ class MaryContextCompositionLayoutTest {
                                 }
                                 Box(Modifier.fillMaxWidth().align(Alignment.BottomCenter).marySidebarBackground(pageHost)) {
                                     RearNavigationBar(currentScreen = "mary", navigationBarMode = ModuleNavigationBarMode.NORMAL,
-                                        backdrop = rememberLayerBackdrop(), onScreenSelected = { navigated++ })
+                                        backdrop = rememberMochiBackdrop(), onScreenSelected = { navigated++ })
                                 }
                                 MaryConversationSidebar(show = sidebar.value, revision = 0, currentSessionId = null,
                                     hasSession = false, locked = false, load = { emptyList() }, onDismiss = { sidebar.value = false },

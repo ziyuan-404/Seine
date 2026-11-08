@@ -3,7 +3,7 @@ package hk.uwu.reareye.widgetapi
 object RearWallpaperApiContract {
     const val SERVICE_PERMISSION = RearWidgetApiContract.SERVICE_PERMISSION
     const val HOOK_HOST_PACKAGE = RearWidgetApiContract.HOOK_HOST_PACKAGE
-    const val ACTION_REQUEST_HOOK_SERVICE = "hk.uwu.reareye.wallpaperapi.REQUEST_HOOK_SERVICE"
+    const val ACTION_REQUEST_HOOK_SERVICE = "fr.uwu.Seine.wallpaperapi.REQUEST_HOOK_SERVICE"
 
     object Extras {
         const val BUNDLE = "bundle"

@@ -3,14 +3,21 @@ package hk.uwu.reareye.ui.config
 import androidx.annotation.StringRes
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Tune
+import hk.uwu.reareye.BuildConfig
 import hk.uwu.reareye.R
+import hk.uwu.reareye.utils.NativeNotificationPrivacy
 import hk.uwu.reareye.lyrics.LyricParser
 import hk.uwu.reareye.ui.theme.AppThemeMode
+import ui.feice.mochi.theme.MochiGraphicsLevel
 import kotlin.math.roundToInt
 
 object ConfigKeys {
     const val MODULE_HIDE_LAUNCHER_ENTRY = "module_hide_launcher_entry"
     const val MODULE_THEME_MODE = "module_theme_mode"
+    const val MODULE_MOCHI_GRAPHICS_LEVEL = "module_mochi_graphics_level"
+    const val MODULE_MOCHI_COLOR_MODE = "module_mochi_color_mode"
+    const val MODULE_MOCHI_PALETTE_STYLE = "module_mochi_palette_style"
+    const val MODULE_MOCHI_SEED_COLOR = "module_mochi_seed_color"
     const val MODULE_NAVIGATION_BAR_MODE = "module_navigation_bar_mode"
     const val MODULE_SEARCH_BAR_STYLE = "module_search_bar_style"
     const val MODULE_STORE_API_PROVIDER = "module_store_api_provider"
@@ -23,9 +30,10 @@ object ConfigKeys {
     const val ACTIVITIES_WHITELIST_APPS = "activities_whitelist_apps"
     const val REAR_APP_ENABLED = "rear_app_enabled"
     const val REAR_APP_DPI = "rear_app_dpi"
-    const val REAR_APP_KEYBOARD = "rear_app_keyboard"
     const val REAR_APP_FACE_AUTH = "rear_app_face_auth"
-    const val REAR_APP_GESTURES = "rear_app_gestures"
+    const val REAR_NOTIFICATION_FACE_AUTH_STYLE = "rear_notification_face_auth_style"
+    const val REAR_APP_FACE_AUTH_STYLE = "rear_app_face_auth_style"
+    const val REAR_FACE_AUTH_STYLE = "rear_face_auth_style"
     const val REAR_APP_HOME_STYLE = "rear_app_home_style"
     const val REAR_APP_ORDER_MODE = "rear_app_order_mode"
     const val REAR_APP_ORDER_DATA = "rear_app_order_data"
@@ -33,6 +41,7 @@ object ConfigKeys {
     const val REAR_APP_REGION = "rear_app_region"
     const val REAR_APP_ROUNDED = "rear_app_rounded"
     const val REAR_APP_CORNER_RADIUS = "rear_app_corner_radius"
+    const val REAR_APP_CAMERA_FILL = "rear_app_camera_fill"
     const val ALLOW_ALL_ACTIVITIES = "allow_all_activities"
     const val ALLOW_EXTERNAL_DISPLAY_LAUNCH = "allow_external_display_launch"
     const val HOOK_SKIP_LOCK_BACK_HOME = "enable_skip_lock_back_home"
@@ -66,10 +75,11 @@ object ConfigKeys {
     const val REAR_WIDGET_BUSINESS_EXTRA_CONFIG_DATA = "rear_widget_business_extra_config_data"
     const val HOOK_ALLOW_REAR_FOCUS_NOTICES = "enable_allow_rear_focus_notices"
     const val REAR_NOTIFICATION_SYNC = "rear_notification_sync"
+    const val REAR_NOTIFICATION_PRIVACY = "rear_notification_privacy_native"
     const val REAR_NOTIFICATION_GLASS = "rear_notification_glass"
     const val REAR_NOTIFICATION_SYNC_APPS = "rear_notification_sync_apps"
-    const val REAR_NOTIFICATION_FRONT_APPS = "rear_notification_front_apps"
     const val REAR_LIQUID_CHARGING = "rear_liquid_charging"
+    const val REAR_CHARGING_STYLE = "rear_charging_style"
     const val REAR_LIQUID_CHARGING_PERSISTENT = "rear_liquid_charging_persistent"
     const val REAR_SCREEN_TIMEOUT_SECONDS = "rear_screen_timeout_seconds"
 
@@ -153,7 +163,6 @@ object ConfigKeys {
         "subscreen_high_load_mode_disabled_apps"
 
     const val MORE_DEBUG = "enable_more_debug_logging"
-    const val MODULE_FAVORITE_CONFIG_NODES = "module_favorite_config_nodes"
     const val MODULE_NAVIGATION_QUICK_ACTIONS = "module_navigation_quick_actions"
 
     /** RPP 当前已写入 RemoteFile 的双槽位指针和校验元数据。 */
@@ -196,6 +205,23 @@ enum class ModuleNavigationBarMode(
         fun fromValue(value: Int): ModuleNavigationBarMode {
             return entries.firstOrNull { it.value == value } ?: default
         }
+    }
+}
+
+internal enum class ModuleMochiGraphicsLevel(
+    val value: Int,
+    @param:StringRes val titleRes: Int,
+    val level: MochiGraphicsLevel,
+) {
+    MID(0, R.string.module_mochi_graphics_mid, MochiGraphicsLevel.Mid),
+    HIGH(1, R.string.module_mochi_graphics_high, MochiGraphicsLevel.High),
+    EXTRA(2, R.string.module_mochi_graphics_extra, MochiGraphicsLevel.Extra);
+
+    companion object {
+        val default = MID
+
+        fun fromValue(value: Int): ModuleMochiGraphicsLevel =
+            entries.firstOrNull { it.value == value } ?: default
     }
 }
 
@@ -256,7 +282,7 @@ private fun LyricParser.DisplayMode.toTitleRes(): Int {
 
 val REAREyeConfig = listOf(
     ConfigCategory(
-        icon = ConfigCategoryIcon.Package("hk.uwu.reareye"),
+        icon = ConfigCategoryIcon.Package(BuildConfig.APPLICATION_ID),
         titleRes = R.string.category_module_settings,
         descriptionRes = R.string.category_module_settings_desc,
         children = listOf(
@@ -271,6 +297,35 @@ val REAREyeConfig = listOf(
                             titleRes = it.titleRes,
                             value = it.value,
                         )
+                    },
+                ),
+            ),
+            ConfigItem(
+                key = ConfigKeys.MODULE_MOCHI_PALETTE_STYLE,
+                titleRes = R.string.seine_mochi_colors,
+                type = ConfigType.EnumSingleSelect(
+                    defaultValue = 0,
+                    options = listOf(
+                        ConfigType.EnumOption(R.string.seine_mochi_tonal, 0),
+                        ConfigType.EnumOption(R.string.seine_mochi_expressive, 1),
+                        ConfigType.EnumOption(R.string.seine_mochi_vibrant, 2),
+                    ),
+                ),
+            ),
+            ConfigItem(
+                key = ConfigKeys.MODULE_MOCHI_SEED_COLOR,
+                titleRes = R.string.seine_mochi_seed,
+                descriptionRes = R.string.seine_mochi_seed_desc,
+                type = ConfigType.ColorSeed,
+            ),
+            ConfigItem(
+                key = ConfigKeys.MODULE_MOCHI_GRAPHICS_LEVEL,
+                titleRes = R.string.module_mochi_graphics_level,
+                descriptionRes = R.string.module_mochi_graphics_level_desc,
+                type = ConfigType.EnumSingleSelect(
+                    defaultValue = ModuleMochiGraphicsLevel.default.value,
+                    options = ModuleMochiGraphicsLevel.entries.map {
+                        ConfigType.EnumOption(titleRes = it.titleRes, value = it.value)
                     },
                 ),
             ),
@@ -348,7 +403,7 @@ val REAREyeConfig = listOf(
                         key = ConfigKeys.REAR_APP_ENABLED,
                         titleRes = R.string.rear_app_enabled,
                         descriptionRes = R.string.rear_app_enabled_desc,
-                        type = ConfigType.BooleanVal(defaultValue = false),
+                        type = ConfigType.BooleanVal(defaultValue = RearAppDefaults.ENABLED),
                     ),
                     ConfigItem(
                         key = ConfigKeys.REAR_APP_DPI,
@@ -357,22 +412,34 @@ val REAREyeConfig = listOf(
                         type = ConfigType.DensityDpi(defaultValue = RearAppDefaults.APP_DPI),
                     ),
                     ConfigItem(
-                        key = ConfigKeys.REAR_APP_KEYBOARD,
-                        titleRes = R.string.rear_app_keyboard,
-                        descriptionRes = R.string.rear_app_keyboard_desc,
-                        type = ConfigType.BooleanVal(defaultValue = true),
-                    ),
-                    ConfigItem(
                         key = ConfigKeys.REAR_APP_FACE_AUTH,
                         titleRes = R.string.rear_app_face_auth,
                         descriptionRes = R.string.rear_app_face_auth_desc,
-                        type = ConfigType.BooleanVal(defaultValue = false),
+                        type = ConfigType.BooleanVal(defaultValue = RearAppDefaults.FACE_AUTH),
                     ),
                     ConfigItem(
-                        key = ConfigKeys.REAR_APP_GESTURES,
-                        titleRes = R.string.rear_app_gestures,
-                        descriptionRes = R.string.rear_app_gestures_desc,
-                        type = ConfigType.BooleanVal(defaultValue = true),
+                        key = ConfigKeys.REAR_NOTIFICATION_FACE_AUTH_STYLE,
+                        titleRes = R.string.rear_notification_face_auth_style,
+                        descriptionRes = R.string.rear_face_auth_style_desc,
+                        type = ConfigType.EnumSingleSelect(
+                            defaultValue = RearNotificationDefaults.FACE_ANIMATION,
+                            options = listOf(
+                                ConfigType.EnumOption(R.string.rear_face_auth_style_native, 0),
+                                ConfigType.EnumOption(R.string.rear_face_auth_style_orbit, 1),
+                            ),
+                        ),
+                    ),
+                    ConfigItem(
+                        key = ConfigKeys.REAR_APP_FACE_AUTH_STYLE,
+                        titleRes = R.string.rear_application_face_auth_style,
+                        descriptionRes = R.string.rear_face_auth_style_desc,
+                        type = ConfigType.EnumSingleSelect(
+                            defaultValue = RearAppDefaults.FACE_ANIMATION,
+                            options = listOf(
+                                ConfigType.EnumOption(R.string.rear_face_auth_style_native, 0),
+                                ConfigType.EnumOption(R.string.rear_face_auth_style_halo, 1),
+                            ),
+                        ),
                     ),
                     ConfigItem(
                         key = ConfigKeys.REAR_APP_HOME_STYLE,
@@ -425,7 +492,7 @@ val REAREyeConfig = listOf(
                         key = ConfigKeys.ACTIVITIES_WHITELIST_APPS,
                         titleRes = R.string.custom_activities_whitelist_apps,
                         descriptionRes = R.string.custom_activities_whitelist_apps_desc,
-                        type = ConfigType.AppList(defaultValues = emptySet())
+                        type = ConfigType.AppList(defaultValues = RearAppDefaults.ALLOWED_APPS)
                     )
                 )
             ),
@@ -542,7 +609,13 @@ val REAREyeConfig = listOf(
                         key = ConfigKeys.REAR_NOTIFICATION_SYNC,
                         titleRes = R.string.rear_notification_sync,
                         descriptionRes = R.string.rear_notification_sync_desc,
-                        type = ConfigType.BooleanVal(defaultValue = false),
+                        type = ConfigType.BooleanVal(defaultValue = RearNotificationDefaults.ENABLED),
+                    ),
+                    ConfigItem(
+                        key = ConfigKeys.REAR_NOTIFICATION_PRIVACY,
+                        titleRes = R.string.rear_notification_privacy,
+                        descriptionRes = R.string.rear_notification_privacy_desc,
+                        type = ConfigType.BooleanVal(defaultValue = NativeNotificationPrivacy.DEFAULT_ENABLED),
                     ),
                     ConfigItem(
                         key = ConfigKeys.REAR_NOTIFICATION_GLASS,
@@ -570,19 +643,25 @@ val REAREyeConfig = listOf(
                         key = ConfigKeys.REAR_NOTIFICATION_SYNC_APPS,
                         titleRes = R.string.rear_notification_sync_apps,
                         descriptionRes = R.string.rear_notification_sync_apps_desc,
-                        type = ConfigType.AppList(defaultValues = emptySet()),
-                    ),
-                    ConfigItem(
-                        key = ConfigKeys.REAR_NOTIFICATION_FRONT_APPS,
-                        titleRes = R.string.rear_notification_front_apps,
-                        descriptionRes = R.string.rear_notification_front_apps_desc,
-                        type = ConfigType.AppList(defaultValues = emptySet()),
+                        type = ConfigType.AppList(defaultValues = RearNotificationDefaults.APPS),
                     ),
                     ConfigItem(
                         key = ConfigKeys.REAR_LIQUID_CHARGING,
                         titleRes = R.string.rear_liquid_charging,
                         descriptionRes = R.string.rear_liquid_charging_desc,
                         type = ConfigType.BooleanVal(defaultValue = false),
+                    ),
+                    ConfigItem(
+                        key = ConfigKeys.REAR_CHARGING_STYLE,
+                        titleRes = R.string.rear_charging_style,
+                        descriptionRes = R.string.rear_charging_style_desc,
+                        type = ConfigType.EnumSingleSelect(
+                            defaultValue = 1,
+                            options = listOf(
+                                ConfigType.EnumOption(R.string.rear_charging_style_mrss, 0),
+                                ConfigType.EnumOption(R.string.rear_charging_style_glow, 1),
+                            ),
+                        ),
                     ),
                     ConfigItem(
                         key = ConfigKeys.REAR_LIQUID_CHARGING_PERSISTENT,

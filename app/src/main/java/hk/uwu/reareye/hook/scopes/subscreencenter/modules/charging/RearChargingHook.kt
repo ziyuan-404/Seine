@@ -44,16 +44,29 @@ class RearChargingHook : RoxyHooker() {
     private var context: Context? = null
     private var displays: DisplayManager? = null
     private var receiver: BroadcastReceiver? = null
+    private var chargeReceiver: BroadcastReceiver? = null
+    private var carChargeMode = false
+    private var chargeSpeed = 0
+    private var wireless = false
+    private var socDecimal: Int? = null
+    private var socRate = 0
+    private var socSampleAt = 0L
+    private var chargingWatts = -1
+    private var doubleChargeClosed = false
+    private val exiting = LinkedHashSet<RearChargingView>()
     private var launcher: Activity? = null
     private var overlayHost: ViewGroup? = null
     private var findLauncher: () -> Activity? = { null }
-    private var liquid: RearChargingLiquidView? = null
+    private var liquid: RearChargingView? = null
     @Volatile private var plugged = false
-    private var level = -1
+    @Volatile private var level = -1
     private var status = BatteryManager.BATTERY_STATUS_UNKNOWN
     @Volatile private var deadline = 0L
     @Volatile private var suppressed = false
     private var enabled: () -> Boolean = { false }
+    private var style: () -> Int = { 1 }
+    private var shownStyle = -1
+    private var preferencesSubscription: AutoCloseable? = null
     private var keepVisible: () -> Boolean = { false }
     @Volatile private var nativeNotificationManager: Any? = null
     private var reloadNativeNotifications: ((Any) -> Unit)? = null
@@ -70,6 +83,12 @@ class RearChargingHook : RoxyHooker() {
         loadApp("com.xiaomi.subscreencenter") {
             enabled = { hookPrefs.getBoolean(ConfigKeys.REAR_LIQUID_CHARGING, false) }
             keepVisible = { hookPrefs.getBoolean(ConfigKeys.REAR_LIQUID_CHARGING_PERSISTENT, false) }
+            style = { hookPrefs.getInt(ConfigKeys.REAR_CHARGING_STYLE, 1).coerceIn(0, 1) }
+            preferencesSubscription = hookPrefs.observe { key ->
+                if (key == null || key in setOf(ConfigKeys.REAR_CHARGING_STYLE,
+                        ConfigKeys.REAR_LIQUID_CHARGING, ConfigKeys.REAR_LIQUID_CHARGING_PERSISTENT))
+                    main.post { refresh() }
+            }
             val launcherClass = "com.xiaomi.subscreencenter.SubScreenLauncher".toClass()
             val appClass = "com.xiaomi.subscreencenter.SubScreenCenterApp".toClass()
             val getter = appClass.declaredMethods.singleOrNull {
@@ -111,8 +130,13 @@ class RearChargingHook : RoxyHooker() {
                     Intent.ACTION_BATTERY_CHANGED -> {
                         val raw = intent.getIntExtra(BatteryManager.EXTRA_LEVEL, -1)
                         val scale = intent.getIntExtra(BatteryManager.EXTRA_SCALE, -1)
-                        level = if (raw >= 0 && scale > 0) ((raw.toLong() * 100L) / scale).toInt().coerceIn(0, 100) else -1
+                        val updatedLevel = if (raw >= 0 && scale > 0) ((raw.toLong() * 100L) / scale).toInt().coerceIn(0, 100) else -1
+                        if (updatedLevel != level) {
+                            socDecimal = null; socRate = 0; socSampleAt = 0L
+                        }
+                        level = updatedLevel
                         plugged = intent.getIntExtra(BatteryManager.EXTRA_PLUGGED, 0) != 0
+                        wireless = intent.getIntExtra(BatteryManager.EXTRA_PLUGGED, 0) == BatteryManager.BATTERY_PLUGGED_WIRELESS
                         status = intent.getIntExtra(BatteryManager.EXTRA_STATUS, BatteryManager.BATTERY_STATUS_UNKNOWN)
                     }
                     Intent.ACTION_POWER_CONNECTED -> {
@@ -128,7 +152,7 @@ class RearChargingHook : RoxyHooker() {
                             main.postDelayed(timeout, 8_000L)
                         }
                     }
-                    Intent.ACTION_POWER_DISCONNECTED -> { plugged = false; finishEntryPriority() }
+                    Intent.ACTION_POWER_DISCONNECTED -> { plugged = false; chargeSpeed = 0; carChargeMode = false; chargingWatts = -1; socDecimal = null; socRate = 0; socSampleAt = 0L; finishEntryPriority() }
                 }
                 refresh()
             }
@@ -138,6 +162,39 @@ class RearChargingHook : RoxyHooker() {
             addAction(Intent.ACTION_POWER_CONNECTED)
             addAction(Intent.ACTION_POWER_DISCONNECTED)
         }, Context.RECEIVER_NOT_EXPORTED)
+        chargeReceiver = object : BroadcastReceiver() {
+            override fun onReceive(context: Context, intent: Intent) {
+                if (intent.action == "hk.uwu.reareye.REAR_CHARGING_STATUS") {
+                    chargeSpeed = intent.getIntExtra("speed", 0).coerceIn(0, 3)
+                    carChargeMode = intent.getBooleanExtra("carMode", false)
+                    chargingWatts = intent.getIntExtra("watts", -1)
+                    doubleChargeClosed = intent.getBooleanExtra("doubleClosed", false)
+                    val fraction = intent.getIntExtra("socDecimal", -1)
+                    val sampledAt = intent.getLongExtra("socAt", 0L)
+                    if (fraction in 0..99 && intent.getIntExtra("socLevel", -1) == level &&
+                        sampledAt > socSampleAt) {
+                        socDecimal = fraction
+                        socRate = intent.getIntExtra("socRate", 0).coerceAtLeast(0)
+                        socSampleAt = sampledAt
+                    }
+                } else {
+                    // The OEM decimal is measured; never invent a progressing percentage.
+                    val fraction = intent.getIntExtra("miui.intent.extra.soc_decimal", -1)
+                    if (fraction !in 0..99) return
+                    socDecimal = fraction
+                    socRate = intent.getIntExtra("miui.intent.extra.soc_decimal_rate", 0).coerceAtLeast(0)
+                    socSampleAt = SystemClock.elapsedRealtime()
+                }
+                refresh()
+            }
+        }
+        ctx.registerReceiver(chargeReceiver, IntentFilter("hk.uwu.reareye.REAR_CHARGING_STATUS"),
+            "android.permission.DEVICE_POWER", main, Context.RECEIVER_EXPORTED)
+        // The vendor SOC sender uses the same receiver contract as the OEM
+        // controller; it need not hold the module bridge's DEVICE_POWER permission.
+        ctx.registerReceiver(chargeReceiver, IntentFilter("miui.intent.action.ACTION_SOC_DECIMAL"),
+            null, main, Context.RECEIVER_EXPORTED)
+        ctx.sendBroadcast(Intent("hk.uwu.reareye.REAR_CHARGING_STATUS_REQUEST").setPackage("com.android.systemui"))
     }
 
     private fun rearDisplay(): Display? = displays?.displays?.firstOrNull {
@@ -163,24 +220,38 @@ class RearChargingHook : RoxyHooker() {
             if (requested) main.postDelayed(awaitHost, 150L)
             return
         }
-        if (overlayHost !== root) dismiss()
+        if (overlayHost !== root || shownStyle != style()) dismiss()
         val label = when (status) {
             BatteryManager.BATTERY_STATUS_FULL -> "已充满"
-            BatteryManager.BATTERY_STATUS_CHARGING -> "正在充电"
+            BatteryManager.BATTERY_STATUS_CHARGING -> {
+                val prefix = if (wireless) "无线" else ""
+                when {
+                    chargeSpeed >= 2 -> "${prefix}超级快充"
+                    chargeSpeed == 1 -> "${prefix}快速充电"
+                    else -> "${prefix}正在充电"
+                }
+            }
             else -> "已连接电源 · 暂停充电"
         }
         if (liquid == null) {
             runCatching {
+                if (SystemClock.elapsedRealtime() - socSampleAt > 10_000L) {
+                    socDecimal = null; socRate = 0; socSampleAt = 0L
+                }
                 // Use the existing rear launcher window. Android 17 can reject a new
                 // Presentation window on this internal secondary display after wake.
-                val view = RearChargingLiquidView(root.context)
+                val selectedStyle = style()
+                val view: RearChargingView = if (selectedStyle == 0) RearMrssChargingView(root.context)
+                    else RearChargingLiquidView(root.context)
+                view.tag = "reareye_charging_overlay"
+                shownStyle = selectedStyle
                 view.elevation = 32_000f
                 view.keepScreenOn = ownsEntryPriority()
                 view.setOnClickListener { suppressed = true; finishEntryPriority() }
                 root.addView(view, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
                 overlayHost = root
                 liquid = view
-                view.updateBattery(level, label, animateEntry = true)
+                view.updateBattery(level, label, animateEntry = true, socDecimal = socDecimal)
                 YLog.info("[REAREye-Charging] shown level=$level hostDisplay=${host.display?.displayId}")
             }.onFailure {
                 dismiss()
@@ -188,8 +259,9 @@ class RearChargingHook : RoxyHooker() {
             }
         } else {
             liquid?.keepScreenOn = ownsEntryPriority()
-            liquid?.updateBattery(level, label)
+            liquid?.updateBattery(level, label, socDecimal = socDecimal)
         }
+        liquid?.updateNativeCharge(chargeSpeed, chargingWatts, doubleChargeClosed, socRate, socSampleAt, carChargeMode)
     }
 
     private fun ownsEntryPriority(): Boolean = enabled() && plugged && !suppressed &&
@@ -286,14 +358,17 @@ class RearChargingHook : RoxyHooker() {
         }.onFailure { YLog.warn("Rear charge wake unavailable: ${it.javaClass.simpleName}") }
     }
 
-    private fun dismiss() {
+    private fun dismiss(animate: Boolean = true) {
         main.removeCallbacks(awaitHost)
         val view = liquid
         val root = overlayHost
         liquid = null
         overlayHost = null
         if (view != null) {
-            runCatching { root?.removeView(view) }
+            if (animate && view.isAttachedToWindow && view.display?.state == Display.STATE_ON) {
+                exiting.add(view)
+                view.exit { root?.removeView(view); exiting.remove(view) }
+            } else { view.stopTransitions(); runCatching { root?.removeView(view) } }
             YLog.info("[REAREye-Charging] dismissed")
         }
     }
@@ -302,11 +377,17 @@ class RearChargingHook : RoxyHooker() {
         val done = CountDownLatch(1)
         val cleanup = Runnable {
             try {
+                preferencesSubscription?.close()
+                preferencesSubscription = null
                 main.removeCallbacksAndMessages(null)
-                dismiss()
+                dismiss(animate = false)
+                exiting.toList().forEach { view -> view.stopTransitions(); (view.parent as? ViewGroup)?.removeView(view) }
+                exiting.clear()
                 displays?.unregisterDisplayListener(displayListener)
                 receiver?.let { context?.unregisterReceiver(it) }
+                chargeReceiver?.let { context?.unregisterReceiver(it) }
                 receiver = null
+                chargeReceiver = null
                 displays = null
                 context = null
                 launcher = null

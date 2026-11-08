@@ -47,6 +47,7 @@ import com.composables.icons.materialsymbols.rounded.Edit_note
 import com.composables.icons.materialsymbols.rounded.Expand_more
 import com.composables.icons.materialsymbols.rounded.Open_in_new
 import com.composables.icons.materialsymbols.rounded.Storefront
+import hk.uwu.reareye.BuildConfig
 import hk.uwu.reareye.R
 import hk.uwu.reareye.repository.rearwidget.RearAppCardRepository
 import hk.uwu.reareye.repository.rearwidget.RearBusinessConfig
@@ -81,7 +82,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
-import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.InfiniteProgressIndicator
@@ -138,7 +138,7 @@ fun BusinessManagerScreen(
     val showRegisterCardDialog = remember { mutableStateOf(false) }
     var draftCardId by remember { mutableStateOf(RearWidgetConfigCodec.newCardId()) }
     var draftCardTitle by remember { mutableStateOf("") }
-    var draftCardPackageName by remember { mutableStateOf("hk.uwu.reareye") }
+    var draftCardPackageName by remember { mutableStateOf(BuildConfig.APPLICATION_ID) }
     var draftCardBusiness by remember { mutableStateOf("") }
     var draftCardPriorityText by remember { mutableStateOf("500") }
     var draftCardAutomaticPriority by remember { mutableStateOf(true) }
@@ -273,7 +273,7 @@ fun BusinessManagerScreen(
         registerCardMode = 0
         draftCardId = RearWidgetConfigCodec.newCardId()
         draftCardTitle = item.business
-        draftCardPackageName = "hk.uwu.reareye"
+        draftCardPackageName = BuildConfig.APPLICATION_ID
         draftCardBusiness = item.business
         draftCardPriorityText = item.defaultPriority.toString()
         draftCardAutomaticPriority = true
@@ -490,6 +490,7 @@ fun BusinessManagerScreen(
     }
 
     Scaffold(
+        containerColor = if (embedded) Color.Transparent else MiuixTheme.colorScheme.background,
         topBar = {
             if (!embedded) TopAppBar(
                 modifier = Modifier.rearAcrylicEffect(hazeState, hazeStyle),
@@ -528,7 +529,7 @@ fun BusinessManagerScreen(
                 .scrollEndHaptic()
                 .overScrollVertical()
                 .rearAcrylicSource(hazeState)
-                .padding(horizontal = 12.dp),
+                .padding(horizontal = ConfigUi.HorizontalInset),
             contentPadding = PaddingValues(
                 top = if (embedded) {
                     contentPadding.calculateTopPadding()
@@ -542,7 +543,7 @@ fun BusinessManagerScreen(
         ) {
             if (!dataCardsVisible) {
                 item {
-                    Card(
+                    ConfigCard(
                         modifier = Modifier.fillMaxWidth(),
                         insideMargin = PaddingValues(vertical = 24.dp),
                     ) {
@@ -665,7 +666,7 @@ fun BusinessManagerScreen(
                         expandedBusinessId == item.id &&
                         (relatedCards.isNotEmpty() || relatedAppCards.isNotEmpty())
                     ) {
-                        Card(
+                        ConfigCard(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(bottom = 12.dp),
@@ -758,7 +759,7 @@ fun BusinessManagerScreen(
             item {
                 if (dataCardsVisible && widgets.isEmpty()) {
                     ArtRevealItem(visible = true, delayMillis = 40) {
-                        Card(modifier = Modifier.fillMaxWidth()) {
+                        ConfigCard(modifier = Modifier.fillMaxWidth()) {
                             Text(
                                 text = stringResource(R.string.rear_widget_empty_business),
                                 modifier = Modifier.padding(16.dp),

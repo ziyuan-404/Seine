@@ -16,6 +16,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -46,6 +47,8 @@ import top.yukonga.miuix.kmp.basic.SearchBar
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
+internal val LocalRearSearchBarStyle = staticCompositionLocalOf<ModuleSearchBarStyle?> { null }
+
 @Composable
 fun RearSearchBar(
     query: String,
@@ -57,7 +60,7 @@ fun RearSearchBar(
     onSearchFocusChange: (Boolean) -> Unit = {},
 ) {
     when (
-        ModuleSearchBarStyle.fromValue(
+        LocalRearSearchBarStyle.current ?: ModuleSearchBarStyle.fromValue(
             prefsManager.getInt(
                 ConfigKeys.MODULE_SEARCH_BAR_STYLE,
                 ModuleSearchBarStyle.default.value,

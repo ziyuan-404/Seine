@@ -24,16 +24,18 @@
                 android:layout_height="wrap_content" android:gravity="center" android:textColor="#FFFFFFFF"
                 android:textSize="18sp" android:visibility="gone" />
             <LinearLayout android:id="@+id/rear_notification_actions" android:layout_width="match_parent"
-                android:layout_height="40dp" android:layout_marginTop="8dp" android:visibility="gone">
+                android:layout_height="38dp" android:layout_marginTop="8dp" android:visibility="gone">
                 <TextView android:id="@+id/rear_notification_action_one" android:layout_width="0dp"
                     android:layout_height="match_parent" android:layout_weight="1" android:gravity="center"
                     android:layout_marginEnd="4dp" android:background="@drawable/rear_notification_action_background"
                     android:clickable="true" android:focusable="true" android:maxLines="1" android:ellipsize="end"
+                    android:fontFamily="sans-serif-medium" android:includeFontPadding="false"
                     android:textSize="14sp" android:textColor="#FFFFFFFF" />
                 <TextView android:id="@+id/rear_notification_action_two" android:layout_width="0dp"
                     android:layout_height="match_parent" android:layout_weight="1" android:gravity="center"
                     android:layout_marginStart="4dp" android:background="@drawable/rear_notification_action_background"
                     android:clickable="true" android:focusable="true" android:maxLines="1" android:ellipsize="end"
+                    android:fontFamily="sans-serif-medium" android:includeFontPadding="false"
                     android:textSize="14sp" android:textColor="#FFFFFFFF" />
             </LinearLayout>
         </LinearLayout>

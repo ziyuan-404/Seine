@@ -57,7 +57,7 @@ internal class ModuleActivationTracker(
     @Synchronized
     fun bind(provider: () -> ModuleActivationState): ModuleActivationState {
         stateProvider = provider
-        return refresh()
+        return state
     }
 
     @Synchronized
@@ -67,14 +67,17 @@ internal class ModuleActivationTracker(
         return state
     }
 
-    @Synchronized
     fun refresh(): ModuleActivationState {
-        val provider = stateProvider ?: return state
+        val provider = synchronized(this) { stateProvider } ?: return state
+        // A slow framework Binder must never hold the tracker monitor while
+        // UI subscribes or the service-death callback invalidates this provider.
         val next = runCatching(provider)
             .onFailure(onRefreshFailure)
             .getOrDefault(ModuleActivationState.SERVICE_UNAVAILABLE)
-        publish(next)
-        return state
+        return synchronized(this) {
+            if (stateProvider === provider) publish(next)
+            state
+        }
     }
 
     private fun publish(next: ModuleActivationState) {
@@ -104,6 +107,11 @@ object XposedModuleStatus {
     }
     private val remotePreferenceObservers = CopyOnWriteArraySet<(Long) -> Unit>()
     private val remoteStateLock = Any()
+    private val preferenceSnapshots = HashMap<String, RemotePreferencesSnapshot>()
+    private val refreshQueued = java.util.concurrent.atomic.AtomicBoolean(false)
+    private val refreshExecutor = java.util.concurrent.Executors.newSingleThreadExecutor { task ->
+        Thread(task, "reareye-module-status").apply { isDaemon = true }
+    }
 
     @Volatile
     private var service: XposedService? = null
@@ -116,6 +124,12 @@ object XposedModuleStatus {
 
     /** 当前缓存状态。 */
     fun current(): ModuleActivationState = tracker.current()
+
+    internal fun frameworkDescription(): String? = service?.let { boundService ->
+        runCatching {
+            "${boundService.frameworkName} ${boundService.frameworkVersion} · API ${boundService.apiVersion}"
+        }.getOrNull()
+    }
 
     /** 当前 service 代际；service 重新绑定后远程偏好适配必须重新同步本地缓存。 */
     fun remotePreferencesGeneration(): Long = synchronized(remoteStateLock) {
@@ -148,10 +162,17 @@ object XposedModuleStatus {
     }
 
     /** 页面恢复或重新进入时重新读取 scope 和 runningTargets。 */
-    @Synchronized
     fun refresh(): ModuleActivationState {
-        ensureListenerLocked()
+        ensureServiceListener()
         return tracker.refresh()
+    }
+
+    /** Scope/target queries perform Binder IPC; UI lifecycle callbacks enqueue them. */
+    fun refreshAsync() {
+        if (!refreshQueued.compareAndSet(false, true)) return
+        refreshExecutor.execute {
+            try { refresh() } finally { refreshQueued.set(false) }
+        }
     }
 
     /** 确保 service 监听已注册；偏好适配不需要额外的 UI 状态观察者。 */
@@ -175,6 +196,9 @@ object XposedModuleStatus {
             } ?: return null
             val boundService = captured.first
             val capturedGeneration = captured.second
+            synchronized(remoteStateLock) {
+                preferenceSnapshots[name]?.takeIf { it.generation == capturedGeneration && service === boundService }
+            }?.let { return it }
             if (boundService.frameworkProperties and XposedService.PROP_CAP_REMOTE == 0L) {
                 YLog.warn("libxposed service lacks PROP_CAP_REMOTE: preference=$name")
                 return null
@@ -203,11 +227,11 @@ object XposedModuleStatus {
                 return null
             }
             val stable = synchronized(remoteStateLock) {
-                service === boundService && remotePreferencesGeneration.get() == capturedGeneration
+                if (service === boundService && remotePreferencesGeneration.get() == capturedGeneration) {
+                    RemotePreferencesSnapshot(preferences, capturedGeneration).also { preferenceSnapshots[name] = it }
+                } else null
             }
-            if (stable) {
-                return RemotePreferencesSnapshot(preferences, capturedGeneration)
-            }
+            if (stable != null) return stable
             YLog.warn(
                 "Discarded remote preference snapshot after generation change: " +
                         "preference=$name attempt=${attempt + 1} generation=$capturedGeneration " +
@@ -391,20 +415,20 @@ object XposedModuleStatus {
                 override fun onServiceBind(boundService: XposedService) {
                     val generation = synchronized(remoteStateLock) {
                         service = boundService
+                        preferenceSnapshots.clear()
                         remotePreferencesGeneration.incrementAndGet()
                     }
-                    YLog.info(
-                        "libxposed service bound: generation=$generation " +
-                                "remoteCapability=${boundService.frameworkProperties and XposedService.PROP_CAP_REMOTE != 0L}",
-                    )
+                    YLog.info("libxposed service bound: generation=$generation")
                     publishRemotePreferencesGeneration(generation)
                     tracker.bind { resolveState(boundService) }
+                    refreshAsync()
                 }
 
                 override fun onServiceDied(deadService: XposedService) {
                     val generation = synchronized(remoteStateLock) {
                         if (service !== deadService) return@synchronized null
                         service = null
+                        preferenceSnapshots.clear()
                         remotePreferencesGeneration.incrementAndGet()
                     } ?: return
                     YLog.warn("libxposed service died: generation=$generation")

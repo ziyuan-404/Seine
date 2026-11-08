@@ -5,7 +5,7 @@
     <uses-permission
         android:name="android.permission.QUERY_ALL_PACKAGES"
         tools:ignore="PackageVisibilityPolicy,QueryAllPackagesPermission" />
-    <uses-permission android:name="hk.uwu.reareye.permission.ACCESS_REAR_WIDGET_API" />
+    <uses-permission android:name="${applicationId}.permission.ACCESS_REAR_WIDGET_API" />
     <uses-permission android:name="com.android.permission.GET_INSTALLED_APPS" />
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
@@ -17,7 +17,7 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
 
     <permission
-        android:name="hk.uwu.reareye.permission.ACCESS_REAR_WIDGET_API"
+        android:name="${applicationId}.permission.ACCESS_REAR_WIDGET_API"
         android:protectionLevel="normal" />
 
     <application
@@ -32,6 +32,7 @@
 
         <activity
             android:name=".ui.MainActivity"
+            android:enableOnBackInvokedCallback="true"
             android:exported="true"
             android:windowSoftInputMode="adjustResize"
             android:theme="@style/Theme.AppDefault">
@@ -62,7 +63,7 @@
 
         <provider
             android:name=".script.ScriptDataProvider"
-            android:authorities="hk.uwu.reareye.script"
+            android:authorities="${applicationId}.script"
             android:exported="true"
             tools:ignore="ExportedContentProvider" />
 
@@ -104,6 +105,8 @@
 
     <queries>
         <package android:name="com.xiaomi.subscreencenter" />
+        <package android:name="com.miui.personalassistant" />
+        <package android:name="com.android.thememanager" />
         <package android:name="com.miui.weather2" />
     </queries>
 </manifest>

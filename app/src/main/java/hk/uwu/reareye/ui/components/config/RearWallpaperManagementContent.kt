@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -53,14 +54,19 @@ import com.composables.icons.materialsymbols.MaterialSymbols
 import com.composables.icons.materialsymbols.rounded.Storefront
 import dev.chrisbanes.haze.HazeState
 import hk.uwu.reareye.R
+import hk.uwu.reareye.ui.components.SeineMenuDefaults
 import hk.uwu.reareye.repository.rearstore.RearStoreInstalledWallpaper
 import hk.uwu.reareye.repository.rearwallpaper.RearWallpaperInfo
 import hk.uwu.reareye.repository.rearwallpaper.RearWallpaperMetadataOptions
 import hk.uwu.reareye.ui.LocalFeatureGuideDemo
 import hk.uwu.reareye.ui.components.DialogFormColumn
 import hk.uwu.reareye.ui.components.OverlayDialog
+import kotlinx.collections.immutable.persistentListOf
+import ui.feice.mochi.basic.MochiConfirmationDialogBox
+import ui.feice.mochi.icons.MochiIonicon
+import ui.feice.mochi.basic.MochiDialogAction
+import ui.feice.mochi.basic.MochiDialogActionRole
 import hk.uwu.reareye.ui.components.RearBadgeGroup
-import hk.uwu.reareye.ui.components.card.ModuleStyleDeleteAction
 import hk.uwu.reareye.ui.components.card.ModuleStyleIconAction
 import hk.uwu.reareye.ui.components.card.ModuleStyleManagerCard
 import hk.uwu.reareye.ui.components.card.ModuleStyleTextAction
@@ -77,7 +83,6 @@ import top.yukonga.miuix.kmp.basic.BasicComponent
 import top.yukonga.miuix.kmp.basic.BasicComponentDefaults
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
-import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.InfiniteProgressIndicator
 import top.yukonga.miuix.kmp.basic.ScrollBehavior
@@ -126,11 +131,11 @@ fun RearWallpaperManagementContent(
     var previewLabel by remember { mutableStateOf("") }
     var importTitleFallback by remember { mutableStateOf("") }
     var importTitleZhCn by remember { mutableStateOf("") }
-    var importDescriptionFallback by remember { mutableStateOf("Imported by REAREye") }
-    var importDescriptionZhCn by remember { mutableStateOf("由 REAREye 导入") }
+    var importDescriptionFallback by remember { mutableStateOf("Imported by Seine") }
+    var importDescriptionZhCn by remember { mutableStateOf("由 Seine 导入") }
     var importAuthor by remember { mutableStateOf("") }
     var importDesigner by remember { mutableStateOf("") }
-    var importCategory by remember { mutableStateOf("REAREye") }
+    var importCategory by remember { mutableStateOf("Seine") }
     var importResSubType by remember { mutableStateOf("reareye_import") }
     var importEditable by remember { mutableStateOf(false) }
     var importThirdParties by remember { mutableStateOf(true) }
@@ -150,7 +155,6 @@ fun RearWallpaperManagementContent(
     var editSupportAon by remember { mutableStateOf(false) }
     var editPreviewUri by remember { mutableStateOf<Uri?>(null) }
     var editPreviewLabel by remember { mutableStateOf("") }
-    var deleteTarget by remember { mutableStateOf<RearWallpaperInfo?>(null) }
     var intervalTargetId by remember { mutableStateOf<Int?>(null) }
     var intervalInput by remember { mutableStateOf("") }
 
@@ -210,11 +214,11 @@ fun RearWallpaperManagementContent(
         previewLabel = ""
         importTitleFallback = ""
         importTitleZhCn = ""
-        importDescriptionFallback = "Imported by REAREye"
-        importDescriptionZhCn = "由 REAREye 导入"
+        importDescriptionFallback = "Imported by Seine"
+        importDescriptionZhCn = "由 Seine 导入"
         importAuthor = ""
         importDesigner = ""
-        importCategory = "REAREye"
+        importCategory = "Seine"
         importResSubType = "reareye_import"
         importEditable = false
         importThirdParties = true
@@ -256,7 +260,7 @@ fun RearWallpaperManagementContent(
         onEditTemplate = onEditTemplate,
         onGeneratePreview = onGeneratePreview,
         onOpenStoreDetail = onOpenStoreDetail,
-        onDelete = { deleteTarget = it },
+        onDelete = onDelete,
     )
 
     OverlayDialog(
@@ -331,7 +335,7 @@ fun RearWallpaperManagementContent(
                         descriptionZhCn = importDescriptionZhCn.ifBlank { importDescriptionFallback },
                         author = importAuthor,
                         designer = importDesigner,
-                        category = importCategory.ifBlank { "REAREye" },
+                        category = importCategory.ifBlank { "Seine" },
                         resSubType = importResSubType.ifBlank { "reareye_import" },
                         editable = importEditable,
                         thirdParties = importThirdParties,
@@ -399,7 +403,7 @@ fun RearWallpaperManagementContent(
                         descriptionZhCn = editDescriptionZhCn.ifBlank { editDescriptionFallback },
                         author = editAuthor,
                         designer = editDesigner,
-                        category = editCategory.ifBlank { "REAREye" },
+                        category = editCategory.ifBlank { "Seine" },
                         resSubType = editResSubType.ifBlank { "reareye_import" },
                         editable = editEditable,
                         thirdParties = editThirdParties,
@@ -447,38 +451,6 @@ fun RearWallpaperManagementContent(
         }
     }
 
-    OverlayDialog(
-        show = deleteTarget != null,
-        title = stringResource(R.string.rear_wallpaper_delete_title),
-        onDismissRequest = { deleteTarget = null },
-    ) {
-        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Card(modifier = Modifier.fillMaxWidth()) {
-                SuperCard(
-                    title = stringResource(
-                        R.string.rear_wallpaper_delete_message,
-                        deleteTarget?.name.orEmpty(),
-                    ),
-                )
-            }
-            Button(
-                onClick = {
-                    deleteTarget?.let(onDelete)
-                    deleteTarget = null
-                },
-                colors = ButtonDefaults.buttonColorsPrimary(),
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text(stringResource(R.string.rear_widget_action_delete))
-            }
-            Button(
-                onClick = { deleteTarget = null },
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text(stringResource(R.string.rear_widget_cancel))
-            }
-        }
-    }
 }
 
 @Composable
@@ -581,7 +553,7 @@ private fun RearWallpaperManagementList(
                     Modifier
                 }
             )
-            .padding(horizontal = 12.dp),
+            .padding(horizontal = ConfigUi.HorizontalInset),
         state = listState,
         contentPadding = PaddingValues(
             top = paddingValues.calculateTopPadding(),
@@ -591,7 +563,7 @@ private fun RearWallpaperManagementList(
         overscrollEffect = null,
     ) {
         item(key = "wallpaper-overview") {
-            Card(
+            ConfigCard(
                 modifier = Modifier.fillMaxWidth(),
                 insideMargin = PaddingValues(16.dp),
             ) {
@@ -600,7 +572,7 @@ private fun RearWallpaperManagementList(
         }
 
         item(key = "wallpaper-rotation-control") {
-            Card(modifier = Modifier.fillMaxWidth()) {
+            ConfigCard(modifier = Modifier.fillMaxWidth()) {
                 BasicComponent(
                     title = stringResource(R.string.rear_wallpaper_rotation_toggle),
                     startAction = {
@@ -653,7 +625,7 @@ private fun RearWallpaperManagementList(
                                 if (isDragging) {
                                     Modifier.shadow(
                                         elevation = 12.dp,
-                                        shape = RoundedCornerShape(20.dp),
+                                        shape = ConfigUi.CardShape,
                                         clip = false,
                                     )
                                 } else Modifier
@@ -665,7 +637,7 @@ private fun RearWallpaperManagementList(
 
         if (loading) {
             item(key = "wallpaper-loading") {
-                Card(modifier = Modifier.fillMaxWidth()) {
+                ConfigCard(modifier = Modifier.fillMaxWidth()) {
                     SuperCard(
                         title = stringResource(R.string.rear_wallpaper_loading),
                         startAction = { InfiniteProgressIndicator() })
@@ -674,7 +646,7 @@ private fun RearWallpaperManagementList(
         }
         if (!loading && wallpapers.isEmpty()) {
             item(key = "wallpaper-empty") {
-                Card(modifier = Modifier.fillMaxWidth()) { SuperCard(title = stringResource(R.string.rear_wallpaper_catalog_empty)) }
+                ConfigCard(modifier = Modifier.fillMaxWidth()) { SuperCard(title = stringResource(R.string.rear_wallpaper_catalog_empty)) }
             }
         }
         items(remainingWallpapers, key = { "library-${it.wallpaperId}" }) { wallpaper ->
@@ -804,11 +776,26 @@ private fun WallpaperManageCard(
         },
         rightAction = {
             if (wallpaper.canDelete || wallpaper.imported) {
-                ModuleStyleDeleteAction(
-                    icon = MiuixIcons.Delete,
-                    text = stringResource(R.string.rear_widget_action_delete),
-                    onClick = onDelete
-                )
+                var confirmDelete by remember(wallpaper.wallpaperId) { mutableStateOf(false) }
+                MochiConfirmationDialogBox(
+                    expanded = confirmDelete,
+                    onExpandedChange = { confirmDelete = it },
+                    title = stringResource(R.string.rear_wallpaper_delete_title),
+                    message = stringResource(R.string.rear_wallpaper_delete_message, wallpaper.name),
+                    behavior = SeineMenuDefaults.Trailing,
+                    actions = persistentListOf(
+                        MochiDialogAction(
+                            stringResource(R.string.rear_widget_action_delete),
+                            MochiDialogActionRole.Destructive,
+                            onClick = onDelete,
+                        ),
+                    ),
+                    buttonMinHeight = 48.dp,
+                ) {
+                    MochiIonicon("trash-outline", size = 16.dp)
+                    Spacer(Modifier.width(5.dp))
+                    Text(stringResource(R.string.rear_widget_action_delete))
+                }
             }
         },
     )
@@ -1080,7 +1067,7 @@ private fun FilePickRow(
     onPick: () -> Unit,
     onClear: (() -> Unit)? = null,
 ) {
-    Card(modifier = Modifier.fillMaxWidth()) {
+    ConfigCard(modifier = Modifier.fillMaxWidth()) {
         BasicComponent(
             title = title,
             summary = label,
@@ -1118,7 +1105,7 @@ private fun MetadataSwitchRow(
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
 ) {
-    Card(modifier = Modifier.fillMaxWidth()) {
+    ConfigCard(modifier = Modifier.fillMaxWidth()) {
         BasicComponent(
             title = title,
             onClick = { onCheckedChange(!checked) },

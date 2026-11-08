@@ -315,7 +315,7 @@ class ScriptProjectStore(context: Context) {
         private val FILE_NAME = Regex("^[A-Za-z0-9_.-]+$")
         private val SAMPLE = """
 local function hello(params, config, context)
-    return "Hello " .. tostring(params.name or "REAREye")
+    return "Hello " .. tostring(params.name or "Seine")
 end
 
 return {

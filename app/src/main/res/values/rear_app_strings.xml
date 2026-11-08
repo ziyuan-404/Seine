@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="rear_app_settings_title">背屏应用与调节</string>
-    <string name="rear_app_settings_desc">在背屏打开所选应用，调整界面大小、键盘、手势与桌面。</string>
-    <string name="rear_app_enabled">背屏应用增强</string>
+    <string name="rear_app_settings_desc">调整显示区域、DPI、亮屏时长与逐应用兼容设置。</string>
+    <string name="rear_app_enabled">启用妙享背屏增强</string>
     <string name="rear_app_enabled_desc">为背屏应用白名单中的应用启用界面缩放、背屏键盘与导航手势。先选择要使用的应用，再从背屏应用列表打开。</string>
     <string name="rear_app_dpi">应用内容大小（等效 DPI）</string>
     <string name="rear_app_dpi_desc">数值越小，文字、图片和控件整体越小，可显示的内容越多。窗口大小由“显示区域”单独控制。仅作用于背屏应用。</string>
@@ -18,10 +18,13 @@
     <string name="rear_app_dpi_450">450 DPI</string>
     <string name="rear_app_keyboard">在背屏显示键盘</string>
     <string name="rear_app_face_auth">打开应用前验证人脸</string>
+    <string name="rear_face_auth_style">人脸验证样式</string>
+    <string name="rear_face_auth_style_desc">独立选择此入口的人脸验证动画；两种样式都使用系统已录入的人脸验证。切换后在下一次验证时生效。</string>
+    <string name="rear_face_auth_style_native">原厂验证卡片</string>
+    <string name="rear_face_auth_style_orbit">环绕光晕</string>
+    <string name="rear_face_auth_style_halo">光晕</string>
     <string name="rear_app_face_auth_desc">从背屏应用列表或通知打开应用时，沿用原厂规则：手机已解锁或未设置安全锁时免验证；安全锁定时，使用原厂动画验证系统已录入的人脸，未录入、失败或取消时不打开。请先在系统设置录入机主人脸。</string>
     <string name="rear_app_keyboard_desc">点击背屏应用的输入框时，在背屏调用当前输入法，支持打字回复。键盘样式由当前输入法决定。</string>
-    <string name="rear_app_gestures">背屏应用导航手势</string>
-    <string name="rear_app_gestures_desc">使用原厂返回和上拉应用栏手势；蜂窝模式仅改变应用图标排列。</string>
     <string name="rear_app_home_style">上拉应用栏排列</string>
     <string name="rear_app_home_style_desc">仅调整原厂上拉应用栏内的图标排列，背景、动画与退出手势沿用原厂。</string>
     <string name="rear_app_home_stock">原厂应用选择界面</string>
@@ -31,14 +34,16 @@
     <string name="rear_app_order_selection">按选择顺序</string>
     <string name="rear_app_order_name">按应用名称</string>
     <string name="rear_app_order_package">按包名</string>
-    <string name="rear_app_display_title">显示区域与圆角</string>
-    <string name="rear_app_display_desc">拖动、缩放应用显示区域，避开摄像头，并设置卡片圆角。</string>
+    <string name="rear_app_display_title">显示区域</string>
+    <string name="rear_app_display_desc">调整应用窗口、圆角和左侧摄像头区域填色。</string>
+    <string name="rear_app_camera_fill">填充左侧摄像头区域</string>
+    <string name="rear_app_camera_fill_desc">保持内容在摄像头区域外，按当前应用背景颜色延伸左侧显示区域；可与应用圆角同时使用。</string>
     <string name="rear_app_rounded">应用显示区域圆角</string>
     <string name="rear_app_rounded_desc">为应用区域四角添加圆角，让左上、左下也与背屏右侧的弧度协调。关闭后使用直角区域。</string>
-    <string name="rear_app_region_hint">拖动蓝色区域移动位置，拖动四角圆点调整大小。默认避让摄像头，也可手动扩展到整个背屏；边界范围为 0%—100%。</string>
+    <string name="rear_app_region_hint" formatted="false">拖动蓝色区域移动位置，拖动左侧白点调整边界。启用圆角时，左上和左下各用两个白点标出圆角两端；右边界可用下方滑块调整。</string>
     <string name="rear_app_region_auto">自动避让摄像头</string>
     <string name="rear_app_region_custom">自定义显示区域</string>
-    <string name="rear_app_region_reset">恢复自动安全区域</string>
+    <string name="rear_app_region_reset">恢复默认显示区域</string>
     <string name="rear_app_region_save">保存并应用</string>
     <string name="rear_app_region_saved">显示区域设置已保存</string>
     <string name="rear_app_region_left">左边界</string>
@@ -53,4 +58,6 @@
     <string name="rear_app_region_loading">等待模块配置服务连接…</string>
     <string name="rear_app_region_unavailable">配置服务尚未连接，请返回后重试。</string>
     <string name="rear_app_region_unsaved">调整后点击“保存并应用”。返回会放弃未保存的更改。</string>
+    <string name="rear_notification_face_auth_style">通知解锁动画</string>
+    <string name="rear_application_face_auth_style">应用解锁动画</string>
 </resources>

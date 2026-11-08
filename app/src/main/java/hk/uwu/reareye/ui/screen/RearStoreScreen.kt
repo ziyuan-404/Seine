@@ -540,7 +540,7 @@ private fun defaultWallpaperMetadataOptions(detail: RearStoreWidgetDetail): Rear
         descriptionZhCn = descriptionText,
         author = authorName,
         designer = authorName,
-        category = "REAREye",
+        category = "Seine",
         resSubType = "rearstore_" + detail.widgetId.lowercase(Locale.ROOT)
             .replace(Regex("[^a-z0-9._-]"), "_"),
         editable = false,

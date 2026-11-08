@@ -13,7 +13,6 @@ import hk.uwu.reareye.ui.components.config.ConfigDashboard
 import hk.uwu.reareye.ui.components.config.RearWallpaperManagerScreen
 import hk.uwu.reareye.ui.components.config.buildMoreCategories
 import hk.uwu.reareye.ui.config.REAREyeConfig
-import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
 
 /** Use the production screens and dialogs. Only their data and side effects are substituted. */
 @Composable
@@ -51,10 +50,8 @@ internal fun FeatureGuideDemoScreen(
         ConfigDashboard(
             moreCategories = buildMoreCategories(REAREyeConfig),
             contentPadding = PaddingValues(bottom = bottomPadding),
-            scrollBehavior = MiuixScrollBehavior(),
             onOpenCategory = {}, onOpenScriptManagement = {}, onMoreSearchRequested = {},
             onOpenStore = {},
-            onOpenFavoriteCategory = {}, favoriteNodeCount = 0,
             selectedTabIndex = step.dashboardTab ?: 0,
             cardContent = { _, _, _, _, _ ->
                 CardManagerScreen(

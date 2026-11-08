@@ -1,49 +1,51 @@
 package hk.uwu.reareye.ui.screen
 
-import android.annotation.SuppressLint
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.PredictiveBackHandler
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.core.updateTransition
+import androidx.compose.animation.core.SeekableTransitionState
+import androidx.compose.animation.core.rememberTransition
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
-import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.rounded.Favorite
-import androidx.compose.material.icons.rounded.FavoriteBorder
+import hk.uwu.reareye.ui.components.navigation.BACKGROUND_PARALLAX
+import hk.uwu.reareye.ui.components.navigation.BACKGROUND_SCALE_REDUCTION
+import hk.uwu.reareye.ui.components.navigation.LAYER_ENTER_DURATION
+import hk.uwu.reareye.ui.components.navigation.LAYER_EXIT_DURATION
+import hk.uwu.reareye.ui.components.navigation.PREDICTIVE_CANCEL_DURATION
+import hk.uwu.reareye.ui.components.navigation.PredictiveBackMotionTracker
+import hk.uwu.reareye.ui.components.navigation.predictiveExitProgress
+import hk.uwu.reareye.ui.components.navigation.predictiveSettleDuration
+import hk.uwu.reareye.ui.components.navigation.predictiveSettleEasing
+import hk.uwu.reareye.ui.components.navigation.predictiveTranslationFraction
+import hk.uwu.reareye.ui.components.navigation.smootherStep
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.lerp
-import androidx.compose.ui.input.nestedscroll.nestedScroll
-import androidx.compose.ui.input.pointer.PointerEventPass
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.input.pointer.positionChanged
+import androidx.compose.ui.graphics.BlurEffect
+import androidx.compose.ui.graphics.TileMode
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.draw.drawWithContent
+import ui.feice.mochi.list.MochiListRow
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
@@ -57,9 +59,12 @@ import hk.uwu.reareye.ui.components.config.BusinessManagerScreen
 import hk.uwu.reareye.ui.components.config.CardManagerScreen
 import hk.uwu.reareye.ui.components.config.ConfigDashboard
 import hk.uwu.reareye.ui.components.config.ConfigNodeRow
+import hk.uwu.reareye.ui.components.config.ConfigUi
+import hk.uwu.reareye.ui.components.config.ConfigBackupPage
+import hk.uwu.reareye.ui.components.config.LocalConfigOwnsBack
 import hk.uwu.reareye.ui.components.config.CustomBoundsCompatManagerScreen
-import hk.uwu.reareye.ui.components.config.RearAppDisplayManagerScreen
 import hk.uwu.reareye.ui.components.config.MoreSearchBottomSheet
+import hk.uwu.reareye.ui.components.config.RearAppDisplayManagerScreen
 import hk.uwu.reareye.ui.components.config.RearWallpaperManagerScreen
 import hk.uwu.reareye.ui.components.config.SceneRouteManagerScreen
 import hk.uwu.reareye.ui.components.config.buildMoreCategories
@@ -72,41 +77,27 @@ import hk.uwu.reareye.ui.config.ConfigItem
 import hk.uwu.reareye.ui.config.ConfigKeys
 import hk.uwu.reareye.ui.config.ConfigNode
 import hk.uwu.reareye.ui.config.ConfigType
-import hk.uwu.reareye.ui.config.ModuleNavigationBarMode
 import hk.uwu.reareye.ui.config.PrefsManager
 import hk.uwu.reareye.ui.config.PrefsManager.Companion.getPrefsManager
 import hk.uwu.reareye.ui.config.REAREyeConfig
-import hk.uwu.reareye.ui.theme.AppThemeMode
-import hk.uwu.reareye.ui.theme.rearAcrylicEffect
-import hk.uwu.reareye.ui.theme.rearAcrylicSource
-import hk.uwu.reareye.ui.theme.rememberAcrylicHazeState
-import hk.uwu.reareye.ui.theme.rememberAcrylicHazeStyle
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import top.yukonga.miuix.kmp.basic.Card
-import top.yukonga.miuix.kmp.basic.DropdownDefaults
-import top.yukonga.miuix.kmp.basic.DropdownImpl
-import top.yukonga.miuix.kmp.basic.DropdownItem
-import top.yukonga.miuix.kmp.basic.Icon
-import top.yukonga.miuix.kmp.basic.IconButton
-import top.yukonga.miuix.kmp.basic.ListPopupColumn
-import top.yukonga.miuix.kmp.basic.ListPopupDefaults
-import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
-import top.yukonga.miuix.kmp.basic.PopupPositionProvider
 import top.yukonga.miuix.kmp.basic.Scaffold
-import top.yukonga.miuix.kmp.basic.ScrollBehavior
-import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.basic.TopAppBar
-import top.yukonga.miuix.kmp.overlay.OverlayListPopup
-import top.yukonga.miuix.kmp.preference.ArrowPreference
-import top.yukonga.miuix.kmp.theme.MiuixTheme
-import top.yukonga.miuix.kmp.utils.overScrollVertical
-import top.yukonga.miuix.kmp.utils.scrollEndHaptic
-import java.util.IdentityHashMap
+import ui.feice.mochi.effect.overscroll.MochiScrollDefaults
+import ui.feice.mochi.effect.overscroll.ProvideMochiOverscroll
+import ui.feice.mochi.list.LocalMochiListItemSpacing
+import ui.feice.mochi.list.MochiListCard
+import ui.feice.mochi.list.mochiListSection
+import ui.feice.mochi.navigation.MochiBackButton
+import ui.feice.mochi.navigation.MochiTitleBar
+import ui.feice.mochi.theme.MochiDefaults
 
 private sealed interface ConfigRoute {
     data object Root : ConfigRoute
-    data object Favorites : ConfigRoute
+    data object Backup : ConfigRoute
     data class Category(val category: ConfigCategory) : ConfigRoute
     data class AppList(val item: ConfigItem) : ConfigRoute
     data object RearWallpaperManager : ConfigRoute
@@ -122,18 +113,9 @@ private sealed interface ConfigRoute {
     data class WallpaperTemplate(val wallpaper: RearWallpaperInfo) : ConfigRoute
 }
 
+private const val PREDICTIVE_TRANSLATION_PERCENT = 50L
 private const val NAV_BAR_EXIT_DURATION_MS = 220L
 private const val OVERLAY_ROUTE_EXIT_DURATION_MS = 220L
-
-private data class FavoriteConfigNodeEntry(
-    val id: String,
-    val node: ConfigNode,
-)
-
-private data class FavoriteConfigNodeIndex(
-    val entries: List<FavoriteConfigNodeEntry>,
-    val nodeIdLookup: IdentityHashMap<ConfigNode, String>,
-)
 
 private data class ConfigAnimatedRoute(
     val route: ConfigRoute,
@@ -152,17 +134,16 @@ private fun ConfigRoute.isOverlayRoute(): Boolean {
             this is ConfigRoute.RearAppDisplayManager
 }
 
-@SuppressLint("LocalContextResourcesRead")
 @Composable
 fun ConfigScreen(
     bottomInnerPadding: Dp = 0.dp,
     quickManagerTarget: ConfigType.ManagerType? = null,
     onQuickManagerTargetHandled: () -> Unit = {},
     onAppListModeChange: (Boolean) -> Unit = {},
-    onThemeModeChange: (Int) -> Unit = {},
-    onNavigationBarModeChange: (Int) -> Unit = {},
+    onAppearanceChanged: () -> Unit = {},
     onOpenRearStore: () -> Unit = {},
     onOpenRearStoreDetail: (String) -> Unit = {},
+    onOpenPresetPackDialog: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val prefsManager = remember { context.getPrefsManager() }
@@ -200,101 +181,100 @@ fun ConfigScreen(
             depth = routeStack.size,
         )
     }
-    val scrollBehavior = MiuixScrollBehavior()
-    val hazeState = rememberAcrylicHazeState()
-    val hazeStyle = rememberAcrylicHazeStyle()
     val routeScope = rememberCoroutineScope()
-
-    val favoriteNodeIndex = remember(REAREyeConfig) {
-        buildFavoriteConfigNodeIndex(
-            nodes = REAREyeConfig,
-            resolveResourceEntryName = context.resources::getResourceEntryName,
-        )
-    }
-    val availableFavoriteNodeIds = remember(favoriteNodeIndex.entries) {
-        favoriteNodeIndex.entries.mapTo(mutableSetOf()) { it.id }
-    }
-    val storedFavoriteNodeIds = remember(prefsManager) {
-        prefsManager.getStringSet(ConfigKeys.MODULE_FAVORITE_CONFIG_NODES, emptySet()).toSet()
-    }
-    val initialFavoriteNodeIds = remember(storedFavoriteNodeIds, availableFavoriteNodeIds) {
-        storedFavoriteNodeIds.filterTo(mutableSetOf()) { it in availableFavoriteNodeIds }
-    }
-    var favoriteNodeIds by remember {
-        mutableStateOf(initialFavoriteNodeIds.toSet())
-    }
-    val favoriteNodes = remember(favoriteNodeIds, favoriteNodeIndex.entries) {
-        favoriteNodeIndex.entries
-            .filter { favoriteNodeIds.contains(it.id) }
-            .map { it.node }
+    val routeTransitionState = remember { SeekableTransitionState(animatedRoute) }
+    val routeTransition = rememberTransition(routeTransitionState, label = "ConfigRouteTransition")
+    LaunchedEffect(animatedRoute) {
+        routeTransitionState.animateTo(animatedRoute)
     }
 
-    LaunchedEffect(prefsManager, storedFavoriteNodeIds, initialFavoriteNodeIds) {
-        if (storedFavoriteNodeIds != initialFavoriteNodeIds) {
-            prefsManager.putStringSet(
-                ConfigKeys.MODULE_FAVORITE_CONFIG_NODES,
-                initialFavoriteNodeIds
-            )
-        }
-    }
-
-    fun toggleFavoriteNode(node: ConfigNode) {
-        val nodeId = favoriteNodeIndex.nodeIdLookup[node] ?: return
-        val nextFavoriteNodeIds = favoriteNodeIds.toMutableSet()
-        if (!nextFavoriteNodeIds.add(nodeId)) {
-            nextFavoriteNodeIds.remove(nodeId)
-        }
-        favoriteNodeIds = nextFavoriteNodeIds
-        prefsManager.putStringSet(ConfigKeys.MODULE_FAVORITE_CONFIG_NODES, nextFavoriteNodeIds)
-    }
-
-    val handlePreferenceChanged = remember(
-        prefsManager,
-        onThemeModeChange,
-        onNavigationBarModeChange,
-    ) {
-        { item: ConfigItem ->
-            when (item.key) {
-                ConfigKeys.MODULE_THEME_MODE -> {
-                    onThemeModeChange(
-                        prefsManager.getInt(
-                            ConfigKeys.MODULE_THEME_MODE,
-                            AppThemeMode.default.value,
-                        )
-                    )
-                }
-
-                ConfigKeys.MODULE_NAVIGATION_BAR_MODE -> {
-                    onNavigationBarModeChange(
-                        prefsManager.getInt(
-                            ConfigKeys.MODULE_NAVIGATION_BAR_MODE,
-                            ModuleNavigationBarMode.default.value,
-                        )
-                    )
-                }
-            }
+    val handlePreferenceChanged: (ConfigItem) -> Unit = { item ->
+        when (item.key) {
+            ConfigKeys.MODULE_THEME_MODE,
+            ConfigKeys.MODULE_MOCHI_COLOR_MODE,
+            ConfigKeys.MODULE_MOCHI_PALETTE_STYLE,
+            ConfigKeys.MODULE_MOCHI_SEED_COLOR,
+            ConfigKeys.MODULE_MOCHI_GRAPHICS_LEVEL,
+            ConfigKeys.MODULE_NAVIGATION_BAR_MODE,
+            ConfigKeys.MODULE_SEARCH_BAR_STYLE -> onAppearanceChanged()
         }
     }
 
     fun navigateBack() {
         if (routeStack.size <= 1) return
-        if (isOverlayMode) {
+        val leavingOverlay = routeStack.last().isOverlayRoute()
+        routeStack = routeStack.dropLast(1)
+        if (leavingOverlay && !routeStack.last().isOverlayRoute()) {
             routeScope.launch {
-                val newStack = routeStack.dropLast(1)
-                routeStack = newStack
                 delay(OVERLAY_ROUTE_EXIT_DURATION_MS)
-                if (!newStack.last().isOverlayRoute()) {
-                    onAppListModeChange(false)
-                }
+                if (!routeStack.last().isOverlayRoute()) onAppListModeChange(false)
             }
-        } else {
-            routeStack = routeStack.dropLast(1)
         }
     }
 
-    BackHandler(enabled = routeStack.size > 1) {
-        navigateBack()
+    val backMotion = remember { PredictiveBackMotionTracker() }
+    val backProgress = remember { Animatable(0f) }
+    var backDestination by remember { mutableStateOf<ConfigAnimatedRoute?>(null) }
+    var settlingBack by remember { mutableStateOf(false) }
+
+    PredictiveBackHandler(enabled = routeStack.size > 1) { events ->
+        val stack = routeStack
+        if (stack.size <= 1 || settlingBack) return@PredictiveBackHandler
+        val previous = ConfigAnimatedRoute(stack[stack.lastIndex - 1], stack.size - 1)
+        var animatingCancellation = false
+        try {
+            events.collect { event ->
+                if (routeStack == stack) {
+                    if (backDestination == null) {
+                        backMotion.reset(event.progress)
+                        backDestination = previous
+                    } else {
+                        backMotion.update(event.progress)
+                    }
+                    backProgress.snapTo(event.progress)
+                }
+            }
+            if (routeStack == stack) {
+                settlingBack = true
+                if (backDestination == null) {
+                    backMotion.reset()
+                    backDestination = previous
+                }
+                val progress = backProgress.value
+                val target = predictiveExitProgress(PREDICTIVE_TRANSLATION_PERCENT)
+                val duration = predictiveSettleDuration(progress, PREDICTIVE_TRANSLATION_PERCENT)
+                val easing = predictiveSettleEasing(backMotion.releaseVelocity(), progress, target, duration)
+                backProgress.animateTo(target, tween(duration, easing = easing))
+                if (routeStack == stack) {
+                    routeTransitionState.snapTo(previous)
+                    navigateBack()
+                }
+            }
+        } catch (cancelled: CancellationException) {
+            if (backDestination != null && routeStack == stack && !settlingBack) {
+                settlingBack = true
+                animatingCancellation = true
+                routeScope.launch {
+                    try {
+                        backProgress.animateTo(0f, tween(PREDICTIVE_CANCEL_DURATION, easing = FastOutSlowInEasing))
+                    } finally {
+                        backDestination = null
+                        settlingBack = false
+                    }
+                }
+                throw cancelled
+            }
+            throw cancelled
+        } finally {
+            // During a cancelled gesture the page scope owns the return animation.
+            if (!animatingCancellation) {
+                backDestination = null
+                settlingBack = false
+                withContext(NonCancellable) { backProgress.snapTo(0f) }
+            }
+        }
     }
+    BackHandler(enabled = settlingBack) {}
 
     fun openOverlayRoute(route: ConfigRoute) {
         routeScope.launch {
@@ -380,211 +360,147 @@ fun ConfigScreen(
         onQuickManagerTargetHandled()
     }
 
-    val routeTransition = updateTransition(
-        targetState = animatedRoute,
-        label = "ConfigRouteTransition",
-    )
-
-    Scaffold { paddingValues ->
-        routeTransition.AnimatedContent(
-            modifier = Modifier
-                .fillMaxSize()
-                .graphicsLayer { clip = true },
-            contentKey = { it.route },
-            transitionSpec = {
-                val forward = targetState.depth > initialState.depth
-                slideInHorizontally(
-                    animationSpec = tween(
-                        durationMillis = 320,
-                        easing = FastOutSlowInEasing,
-                    )
-                ) { fullWidth ->
-                    if (forward) fullWidth else -fullWidth
-                } togetherWith slideOutHorizontally(
-                    animationSpec = tween(
-                        durationMillis = 320,
-                        easing = FastOutSlowInEasing,
-                    )
-                ) { fullWidth ->
-                    if (forward) -fullWidth else fullWidth
-                }
-            },
-        ) { target ->
-            when (val route = target.route) {
-                ConfigRoute.Root -> ConfigDashboard(
-                    moreCategories = moreCategories,
-                    contentPadding = PaddingValues(
-                        top = paddingValues.calculateTopPadding(),
-                        bottom = paddingValues.calculateBottomPadding() + bottomInnerPadding,
-                    ),
-                    scrollBehavior = scrollBehavior,
-                    modifier = Modifier.rearAcrylicSource(hazeState),
-                    onOpenCategory = { category ->
-                        // More owns these categories, so returning keeps the More tab selected.
-                        dashboardTabIndex = 3
-                        routeStack = routeStack + ConfigRoute.Category(category)
-                    },
-                    onOpenScriptManagement = {
-                        dashboardTabIndex = 3
-                        routeStack = routeStack + ConfigRoute.ScriptManagement
-                    },
-                    onMoreSearchRequested = {
-                        moreSearchQuery = ""
-                        moreSearchSessionActive = true
-                    },
-                    onOpenStore = onOpenRearStore,
-                    favoriteNodeCount = favoriteNodes.size,
-                    onOpenFavoriteCategory = {
-                        dashboardTabIndex = 3
-                        routeStack = routeStack + ConfigRoute.Favorites
-                    },
-                    selectedTabIndex = dashboardTabIndex,
-                    onSelectedTabIndexChange = { dashboardTabIndex = it },
-                    moreScrollIndex = moreScrollIndex,
-                    moreScrollOffset = moreScrollOffset,
-                    onMoreScrollChanged = { index, offset ->
-                        moreScrollIndex = index
-                        moreScrollOffset = offset
-                    },
-                    cardContent = { focusCardId, onFocusHandled, onComponentRequested, actionRequest, onActionHandled ->
-                        CardManagerScreen(
-                            prefsManager = prefsManager,
-                            onBack = {},
-                            embedded = true,
-                            contentPadding = PaddingValues(
-                                bottom = paddingValues.calculateBottomPadding() + bottomInnerPadding,
-                            ),
-                            focusCardId = focusCardId,
-                            onFocusCardHandled = onFocusHandled,
-                            onOpenComponent = onComponentRequested,
-                            onOpenStoreDetail = onOpenRearStoreDetail,
-                            actionRequest = actionRequest,
-                            onActionHandled = onActionHandled,
-                        )
-                    },
-                    componentContent = { focusBusiness, onFocusHandled, onCardRequested, actionRequest, onActionHandled ->
-                        BusinessManagerScreen(
-                            prefsManager = prefsManager,
-                            onBack = {},
-                            embedded = true,
-                            contentPadding = PaddingValues(
-                                bottom = paddingValues.calculateBottomPadding() + bottomInnerPadding,
-                            ),
-                            focusBusiness = focusBusiness,
-                            onFocusBusinessHandled = onFocusHandled,
-                            onOpenCard = onCardRequested,
-                            onOpenStoreDetail = onOpenRearStoreDetail,
-                            onOpenBusinessExtra = { business ->
-                                openOverlayRoute(ConfigRoute.BusinessExtraDetail(business))
-                            },
-                            actionRequest = actionRequest,
-                            onActionHandled = onActionHandled,
-                        )
-                    },
-                    wallpaperContent = { actionRequest, onActionHandled ->
-                        RearWallpaperManagerScreen(
-                            prefsManager = prefsManager,
-                            state = wallpaperManagerState,
-                            onBack = {},
-                            embedded = true,
-                            contentPadding = PaddingValues(
-                                bottom = paddingValues.calculateBottomPadding() + bottomInnerPadding,
-                            ),
-                            onOpenStoreDetail = onOpenRearStoreDetail,
-                            onEditTemplate = { wallpaper ->
-                                dashboardTabIndex = 2
-                                routeStack = routeStack + ConfigRoute.WallpaperTemplate(wallpaper)
-                            },
-                            actionRequest = actionRequest,
-                            onActionHandled = onActionHandled,
-                        )
-                    },
-                )
-
-                is ConfigRoute.Category -> ConfigSubpageLayout(
-                    title = stringResource(route.category.titleRes),
-                    onBack = ::navigateBack,
-                    scrollBehavior = scrollBehavior,
-                    topBarModifier = Modifier.rearAcrylicEffect(hazeState, hazeStyle),
-                ) {
-                    ConfigNodeList(
-                        nodes = route.category.children,
+    val previewLifecycle = androidx.lifecycle.compose.LocalLifecycleOwner.current.lifecycle
+    val previewBackOwner = remember(previewLifecycle) {
+        object : androidx.activity.OnBackPressedDispatcherOwner {
+            override val lifecycle = previewLifecycle
+            override val onBackPressedDispatcher = androidx.activity.OnBackPressedDispatcher()
+        }
+    }
+    val renderRoute: @Composable (ConfigAnimatedRoute, PaddingValues) -> Unit = { target, paddingValues ->
+        when (val route = target.route) {
+            ConfigRoute.Backup -> ConfigSubpageLayout(
+                title = stringResource(R.string.seine_backup_title),
+                onBack = ::navigateBack,
+            ) {
+                ConfigBackupPage(prefsManager, onAppearanceChanged)
+            }
+            ConfigRoute.Root -> ConfigDashboard(
+                moreCategories = moreCategories,
+                contentPadding = PaddingValues(
+                    top = paddingValues.calculateTopPadding(),
+                    bottom = paddingValues.calculateBottomPadding() + bottomInnerPadding,
+                ),
+                onOpenCategory = { category ->
+                    // More owns these categories, so returning keeps the More tab selected.
+                    dashboardTabIndex = 3
+                    routeStack = routeStack + ConfigRoute.Category(category)
+                },
+                onOpenScriptManagement = {
+                    dashboardTabIndex = 3
+                    routeStack = routeStack + ConfigRoute.ScriptManagement
+                },
+                onMoreSearchRequested = {
+                    moreSearchQuery = ""
+                    moreSearchSessionActive = true
+                },
+                onOpenStore = onOpenRearStore,
+                onOpenPresetPackDialog = onOpenPresetPackDialog,
+                selectedTabIndex = dashboardTabIndex,
+                onSelectedTabIndexChange = { dashboardTabIndex = it },
+                moreScrollIndex = moreScrollIndex,
+                moreScrollOffset = moreScrollOffset,
+                onMoreScrollChanged = { index, offset ->
+                    moreScrollIndex = index
+                    moreScrollOffset = offset
+                },
+                cardContent = { focusCardId, onFocusHandled, onComponentRequested, actionRequest, onActionHandled ->
+                    CardManagerScreen(
                         prefsManager = prefsManager,
+                        onBack = {},
+                        embedded = true,
                         contentPadding = PaddingValues(
                             bottom = paddingValues.calculateBottomPadding() + bottomInnerPadding,
                         ),
-                        scrollBehavior = scrollBehavior,
-                        modifier = Modifier.rearAcrylicSource(hazeState),
-                        onOpenCategory = { category ->
-                            routeStack = routeStack + ConfigRoute.Category(category)
-                        },
-                        onOpenAppList = { item ->
-                            openOverlayRoute(ConfigRoute.AppList(item))
-                        },
-                        onOpenManager = { item -> openManagerItem(item) },
-                        onPreferenceChanged = handlePreferenceChanged,
-                        favoriteNodeIds = favoriteNodeIds,
-                        resolveFavoriteNodeId = { node ->
-                            favoriteNodeIndex.nodeIdLookup[node]
-                        },
-                        onToggleFavorite = { node ->
-                            toggleFavoriteNode(node)
-                        },
+                        focusCardId = focusCardId,
+                        onFocusCardHandled = onFocusHandled,
+                        onOpenComponent = onComponentRequested,
+                        onOpenStoreDetail = onOpenRearStoreDetail,
+                        actionRequest = actionRequest,
+                        onActionHandled = onActionHandled,
                     )
-                }
+                },
+                componentContent = { focusBusiness, onFocusHandled, onCardRequested, actionRequest, onActionHandled ->
+                    BusinessManagerScreen(
+                        prefsManager = prefsManager,
+                        onBack = {},
+                        embedded = true,
+                        contentPadding = PaddingValues(
+                            bottom = paddingValues.calculateBottomPadding() + bottomInnerPadding,
+                        ),
+                        focusBusiness = focusBusiness,
+                        onFocusBusinessHandled = onFocusHandled,
+                        onOpenCard = onCardRequested,
+                        onOpenStoreDetail = onOpenRearStoreDetail,
+                        onOpenBusinessExtra = { business ->
+                            openOverlayRoute(ConfigRoute.BusinessExtraDetail(business))
+                        },
+                        actionRequest = actionRequest,
+                        onActionHandled = onActionHandled,
+                    )
+                },
+                wallpaperContent = { actionRequest, onActionHandled ->
+                    RearWallpaperManagerScreen(
+                        prefsManager = prefsManager,
+                        state = wallpaperManagerState,
+                        onBack = {},
+                        embedded = true,
+                        contentPadding = PaddingValues(
+                            bottom = paddingValues.calculateBottomPadding() + bottomInnerPadding,
+                        ),
+                        onOpenStoreDetail = onOpenRearStoreDetail,
+                        onEditTemplate = { wallpaper ->
+                            dashboardTabIndex = 2
+                            routeStack = routeStack + ConfigRoute.WallpaperTemplate(wallpaper)
+                        },
+                        actionRequest = actionRequest,
+                        onActionHandled = onActionHandled,
+                    )
+                },
+            )
 
-                ConfigRoute.LyricsManager -> {
-                    val lyricsCategory = findConfigCategoryByTitleRes(
-                        REAREyeConfig,
-                        R.string.subcategory_lyrics,
-                    )
-                    ConfigSubpageLayout(
-                        title = stringResource(R.string.subcategory_lyrics),
+            is ConfigRoute.Category -> ConfigSubpageLayout(
+                title = stringResource(route.category.titleRes),
+                onBack = ::navigateBack,
+            ) {
+                val pageBottom = paddingValues.calculateBottomPadding() + bottomInnerPadding
+                val moreCategory = moreCategories.firstOrNull { it.category.key == route.category.key }
+                if (route.category.titleRes == R.string.rear_app_settings_title) {
+                    RearAppDisplayManagerScreen(
+                        prefsManager = prefsManager,
                         onBack = ::navigateBack,
-                        scrollBehavior = scrollBehavior,
-                        topBarModifier = Modifier.rearAcrylicEffect(hazeState, hazeStyle),
-                    ) {
-                        ConfigNodeList(
-                            nodes = lyricsCategory?.children.orEmpty(),
-                            prefsManager = prefsManager,
-                            contentPadding = PaddingValues(
-                                bottom = paddingValues.calculateBottomPadding() + bottomInnerPadding,
-                            ),
-                            scrollBehavior = scrollBehavior,
-                            modifier = Modifier.rearAcrylicSource(hazeState),
-                            onOpenCategory = { category ->
-                                routeStack = routeStack + ConfigRoute.Category(category)
-                            },
-                            onOpenAppList = { item ->
-                                openOverlayRoute(ConfigRoute.AppList(item))
-                            },
-                            onOpenManager = { item -> openManagerItem(item) },
-                            onPreferenceChanged = handlePreferenceChanged,
-                            favoriteNodeIds = favoriteNodeIds,
-                            resolveFavoriteNodeId = { node ->
-                                favoriteNodeIndex.nodeIdLookup[node]
-                            },
-                            onToggleFavorite = { node ->
-                                toggleFavoriteNode(node)
-                            },
-                        )
-                    }
-                }
-
-                ConfigRoute.Favorites -> ConfigSubpageLayout(
-                    title = stringResource(R.string.config_favorites_title),
-                    onBack = ::navigateBack,
-                    scrollBehavior = scrollBehavior,
-                    topBarModifier = Modifier.rearAcrylicEffect(hazeState, hazeStyle),
-                ) {
+                        embedded = true,
+                        bottomPadding = pageBottom,
+                        extraSettings = {
+                            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                                moreCategory?.sections.orEmpty()
+                                    .filterNot { section ->
+                                        section.children.any { it.key == ConfigKeys.CFG_REAR_APP_DISPLAY }
+                                    }
+                                    .forEach { section ->
+                                        MochiListCard {
+                                            section.children.forEach { node ->
+                                                ConfigNodeRow(
+                                                    node = node,
+                                                    prefsManager = prefsManager,
+                                                    onOpenCategory = {},
+                                                    onOpenAppList = { openOverlayRoute(ConfigRoute.AppList(it)) },
+                                                    onOpenManager = { openManagerItem(it) },
+                                                    onPreferenceChanged = handlePreferenceChanged,
+                                                )
+                                            }
+                                        }
+                                    }
+                            }
+                        },
+                    )
+                } else {
                     ConfigNodeList(
-                        nodes = favoriteNodes,
+                        nodes = moreCategory?.sections ?: route.category.children,
                         prefsManager = prefsManager,
                         contentPadding = PaddingValues(
                             bottom = paddingValues.calculateBottomPadding() + bottomInnerPadding,
                         ),
-                        scrollBehavior = scrollBehavior,
-                        modifier = Modifier.rearAcrylicSource(hazeState),
                         onOpenCategory = { category ->
                             routeStack = routeStack + ConfigRoute.Category(category)
                         },
@@ -593,23 +509,47 @@ fun ConfigScreen(
                         },
                         onOpenManager = { item -> openManagerItem(item) },
                         onPreferenceChanged = handlePreferenceChanged,
-                        emptyStateRes = R.string.config_favorites_empty,
-                        favoriteNodeIds = favoriteNodeIds,
-                        resolveFavoriteNodeId = { node ->
-                            favoriteNodeIndex.nodeIdLookup[node]
-                        },
-                        onToggleFavorite = { node ->
-                            toggleFavoriteNode(node)
-                        },
+                        onOpenBackup = if (moreCategory?.group?.id == "reareye_settings") {
+                            { routeStack = routeStack + ConfigRoute.Backup }
+                        } else null,
+
                     )
                 }
+            }
 
-                is ConfigRoute.WallpaperTemplate -> ConfigSubpageLayout(
-                    title = stringResource(R.string.rear_wallpaper_template_title),
+            ConfigRoute.LyricsManager -> {
+                val lyricsCategory = findConfigCategoryByTitleRes(
+                    REAREyeConfig,
+                    R.string.subcategory_lyrics,
+                )
+                ConfigSubpageLayout(
+                    title = stringResource(R.string.subcategory_lyrics),
                     onBack = ::navigateBack,
-                    scrollBehavior = scrollBehavior,
-                    topBarModifier = Modifier.rearAcrylicEffect(hazeState, hazeStyle),
                 ) {
+                    ConfigNodeList(
+                        nodes = lyricsCategory?.children.orEmpty(),
+                        prefsManager = prefsManager,
+                        contentPadding = PaddingValues(
+                            bottom = paddingValues.calculateBottomPadding() + bottomInnerPadding,
+                        ),
+                        onOpenCategory = { category ->
+                            routeStack = routeStack + ConfigRoute.Category(category)
+                        },
+                        onOpenAppList = { item ->
+                            openOverlayRoute(ConfigRoute.AppList(item))
+                        },
+                        onOpenManager = { item -> openManagerItem(item) },
+                        onPreferenceChanged = handlePreferenceChanged,
+
+                    )
+                }
+            }
+
+            is ConfigRoute.WallpaperTemplate -> ConfigSubpageLayout(
+                title = stringResource(R.string.rear_wallpaper_template_title),
+                onBack = ::navigateBack,
+            ) {
+                CompositionLocalProvider(LocalConfigOwnsBack provides true) {
                     RearWallpaperTemplateConfigScreen(
                         wallpaper = route.wallpaper,
                         embedded = true,
@@ -618,70 +558,116 @@ fun ConfigScreen(
                         contentPadding = PaddingValues(
                             bottom = paddingValues.calculateBottomPadding() + bottomInnerPadding,
                         ),
-                        modifier = Modifier.rearAcrylicSource(hazeState),
                         onBack = ::navigateBack,
                         onSaved = ::navigateBack,
                     )
                 }
+            }
 
-                is ConfigRoute.AppList -> AppListSelectorScreen(
-                    configItem = route.item,
-                    prefsManager = prefsManager,
-                    onCancel = { closeOverlayRoute() },
-                    onSave = { closeOverlayRoute() }
-                )
+            is ConfigRoute.AppList -> AppListSelectorScreen(
+                configItem = route.item,
+                prefsManager = prefsManager,
+                onCancel = { closeOverlayRoute() },
+                onSave = { closeOverlayRoute() }
+            )
 
-                ConfigRoute.RearWallpaperManager -> RearWallpaperManagerScreen(
+            ConfigRoute.RearWallpaperManager -> RearWallpaperManagerScreen(
+                prefsManager = prefsManager,
+                onBack = { closeOverlayRoute() },
+                onOpenStoreDetail = onOpenRearStoreDetail,
+            )
+
+            ConfigRoute.BusinessManager -> BusinessManagerScreen(
+                prefsManager = prefsManager,
+                onBack = { closeOverlayRoute() },
+                onOpenStoreDetail = onOpenRearStoreDetail,
+                onOpenBusinessExtra = { business ->
+                    routeStack = routeStack + ConfigRoute.BusinessExtraDetail(business)
+                },
+            )
+
+            ConfigRoute.SceneRouteManager -> SceneRouteManagerScreen(
+                prefsManager = prefsManager,
+                onBack = { closeOverlayRoute() },
+            )
+
+            ConfigRoute.CardManager -> CardManagerScreen(
+                prefsManager = prefsManager,
+                onBack = { closeOverlayRoute() },
+                onOpenStoreDetail = onOpenRearStoreDetail,
+            )
+
+            ConfigRoute.BusinessExtraManager -> BusinessExtraConfigManagerScreen(
+                prefsManager = prefsManager,
+                onBack = { closeOverlayRoute() },
+            )
+
+            is ConfigRoute.BusinessExtraDetail -> BusinessExtraConfigScreen(
+                prefsManager = prefsManager,
+                business = route.business,
+                onBack = { routeStack = routeStack.dropLast(1) },
+            )
+
+            ConfigRoute.CustomBoundsCompatManager -> CustomBoundsCompatManagerScreen(
+                prefsManager = prefsManager,
+                onBack = { closeOverlayRoute() },
+            )
+
+            ConfigRoute.RearAppDisplayManager -> CompositionLocalProvider(LocalConfigOwnsBack provides true) {
+                RearAppDisplayManagerScreen(
                     prefsManager = prefsManager,
                     onBack = { closeOverlayRoute() },
-                    onOpenStoreDetail = onOpenRearStoreDetail,
                 )
+            }
 
-                ConfigRoute.BusinessManager -> BusinessManagerScreen(
-                    prefsManager = prefsManager,
-                    onBack = { closeOverlayRoute() },
-                    onOpenStoreDetail = onOpenRearStoreDetail,
-                    onOpenBusinessExtra = { business ->
-                        routeStack = routeStack + ConfigRoute.BusinessExtraDetail(business)
-                    },
-                )
-
-                ConfigRoute.SceneRouteManager -> SceneRouteManagerScreen(
-                    prefsManager = prefsManager,
-                    onBack = { closeOverlayRoute() },
-                )
-
-                ConfigRoute.CardManager -> CardManagerScreen(
-                    prefsManager = prefsManager,
-                    onBack = { closeOverlayRoute() },
-                    onOpenStoreDetail = onOpenRearStoreDetail,
-                )
-
-                ConfigRoute.BusinessExtraManager -> BusinessExtraConfigManagerScreen(
-                    prefsManager = prefsManager,
-                    onBack = { closeOverlayRoute() },
-                )
-
-                is ConfigRoute.BusinessExtraDetail -> BusinessExtraConfigScreen(
-                    prefsManager = prefsManager,
-                    business = route.business,
-                    onBack = { routeStack = routeStack.dropLast(1) },
-                )
-
-                ConfigRoute.CustomBoundsCompatManager -> CustomBoundsCompatManagerScreen(
-                    prefsManager = prefsManager,
-                    onBack = { closeOverlayRoute() },
-                )
-
-                ConfigRoute.RearAppDisplayManager -> RearAppDisplayManagerScreen(
-                    prefsManager = prefsManager,
-                    onBack = { closeOverlayRoute() },
-                )
-
-                ConfigRoute.ScriptManagement -> ScriptManagementScreen(
-                    onBack = ::navigateBack,
-                    bottomInnerPadding = bottomInnerPadding,
-                )
+            ConfigRoute.ScriptManagement -> ScriptManagementScreen(
+                onBack = ::navigateBack,
+                bottomInnerPadding = bottomInnerPadding,
+            )
+        }
+    }
+    Scaffold { paddingValues ->
+        Box(Modifier.fillMaxSize().graphicsLayer { clip = true }) {
+            backDestination?.let { previous ->
+                Box(Modifier.fillMaxSize().graphicsLayer {
+                    val progress = backProgress.value
+                    val depth = 1f - smootherStep(progress)
+                    scaleX = 1f - depth * BACKGROUND_SCALE_REDUCTION
+                    scaleY = scaleX
+                    translationX = -size.width * depth * BACKGROUND_PARALLAX
+                    val intensity = (1f - 0.5f * smootherStep(progress)) * (2f - progress).coerceIn(0f, 1f)
+                    val radius = 12f * intensity
+                    renderEffect = if (radius > 0f) BlurEffect(radius, radius, TileMode.Clamp) else null
+                }.drawWithContent {
+                    drawContent()
+                    val progress = backProgress.value
+                    val intensity = (1f - 0.5f * smootherStep(progress)) * (2f - progress).coerceIn(0f, 1f)
+                    drawRect(Color.Black.copy(alpha = 0.16f * intensity))
+                }) {
+                    CompositionLocalProvider(androidx.activity.compose.LocalOnBackPressedDispatcherOwner provides previewBackOwner) {
+                        renderRoute(previous, paddingValues)
+                    }
+                }
+            }
+            routeTransition.AnimatedContent(
+                modifier = Modifier.fillMaxSize().graphicsLayer {
+                    if (backDestination != null) {
+                        translationX = size.width * backProgress.value *
+                            predictiveTranslationFraction(PREDICTIVE_TRANSLATION_PERCENT)
+                    }
+                },
+                contentKey = { it.route },
+                transitionSpec = {
+                    val forward = targetState.depth > initialState.depth
+                    slideInHorizontally(
+                        tween(if (forward) LAYER_ENTER_DURATION else LAYER_EXIT_DURATION, easing = FastOutSlowInEasing),
+                    ) { width -> if (forward) width else -(width * BACKGROUND_PARALLAX).toInt() } togetherWith
+                        slideOutHorizontally(
+                            tween(if (forward) LAYER_ENTER_DURATION else LAYER_EXIT_DURATION, easing = FastOutSlowInEasing),
+                        ) { width -> if (forward) -(width * BACKGROUND_PARALLAX).toInt() else width }
+                },
+            ) { target ->
+                renderRoute(target, paddingValues)
             }
         }
     }
@@ -710,33 +696,14 @@ fun ConfigScreen(
 private fun ConfigSubpageLayout(
     title: String,
     onBack: () -> Unit,
-    scrollBehavior: ScrollBehavior,
-    topBarModifier: Modifier = Modifier,
     content: @Composable () -> Unit,
 ) {
-    Column(modifier = Modifier.fillMaxSize()) {
-        TopAppBar(
-            modifier = topBarModifier,
-            color = Color.Transparent,
+    Column(Modifier.fillMaxSize().background(MochiDefaults.groupedBackground())) {
+        MochiTitleBar(
             title = title,
-            navigationIconPadding = 12.dp,
-            navigationIcon = {
-                IconButton(onClick = onBack) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = null,
-                    )
-                }
-            },
-            scrollBehavior = scrollBehavior,
+            navigationIcon = { MochiBackButton(onClick = onBack) },
         )
-        Box(
-            modifier = Modifier
-                .weight(1f)
-                .fillMaxWidth(),
-        ) {
-            content()
-        }
+        Box(Modifier.weight(1f).fillMaxWidth()) { content() }
     }
 }
 
@@ -760,163 +727,13 @@ private fun ConfigNodeList(
     nodes: List<ConfigNode>,
     prefsManager: PrefsManager,
     contentPadding: PaddingValues,
-    scrollBehavior: ScrollBehavior,
-    modifier: Modifier = Modifier,
     onOpenCategory: (ConfigCategory) -> Unit,
     onOpenAppList: (ConfigItem) -> Unit,
     onOpenManager: (ConfigItem) -> Unit,
     onPreferenceChanged: (ConfigItem) -> Unit = {},
-    showFavoriteCategoryEntry: Boolean = false,
-    favoriteNodeCount: Int = 0,
-    onOpenFavoriteCategory: (() -> Unit)? = null,
-    emptyStateRes: Int? = null,
-    favoriteNodeIds: Set<String> = emptySet(),
-    resolveFavoriteNodeId: (ConfigNode) -> String? = { null },
-    onToggleFavorite: (ConfigNode) -> Unit = {},
+    onOpenBackup: (() -> Unit)? = null,
 ) {
-    val listState = rememberLazyListState()
-    val isListScrolling by remember {
-        derivedStateOf { listState.isScrollInProgress }
-    }
-
-    LazyColumn(
-        state = listState,
-        modifier = Modifier
-            .fillMaxHeight()
-            .scrollEndHaptic()
-            .overScrollVertical()
-            .nestedScroll(scrollBehavior.nestedScrollConnection)
-            .then(modifier)
-            .padding(horizontal = 12.dp),
-        contentPadding = contentPadding,
-        overscrollEffect = null
-    ) {
-        if (showFavoriteCategoryEntry) {
-            item(key = "favorite_config_category_entry") {
-                Card(
-                    modifier = Modifier
-                        .padding(top = 12.dp)
-                        .fillMaxWidth()
-                ) {
-                    val favoriteIconTint = rememberFavoriteIconTint()
-                    val summary = if (favoriteNodeCount <= 0) {
-                        stringResource(R.string.config_favorites_empty)
-                    } else {
-                        stringResource(R.string.config_favorites_count, favoriteNodeCount)
-                    }
-
-                    ArrowPreference(
-                        title = stringResource(R.string.config_favorites_title),
-                        summary = summary,
-                        onClick = onOpenFavoriteCategory,
-                        startAction = {
-                            Box(
-                                modifier = Modifier.size(28.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Rounded.Favorite,
-                                    contentDescription = null,
-                                    tint = favoriteIconTint,
-                                    modifier = Modifier.size(22.dp)
-                                )
-                            }
-                        }
-                    )
-                }
-            }
-        }
-
-        if (nodes.isEmpty() && emptyStateRes != null) {
-            item(key = "config_node_list_empty_state") {
-                Card(
-                    modifier = Modifier
-                        .padding(top = if (showFavoriteCategoryEntry) 8.dp else 12.dp)
-                        .fillMaxWidth()
-                ) {
-                    Text(
-                        text = stringResource(emptyStateRes),
-                        style = MiuixTheme.textStyles.body2,
-                        color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-                    )
-                }
-            }
-        }
-
-        itemsIndexed(nodes, key = { index, node -> node.key ?: "node_$index" }) { index, node ->
-            val topPadding = if (index == 0 && !showFavoriteCategoryEntry) 12.dp else 8.dp
-            if (node is ConfigGroup) {
-                Card(
-                    modifier = Modifier
-                        .padding(top = topPadding)
-                        .fillMaxWidth()
-                ) {
-                    node.children.forEach { child ->
-                        ConfigNodeRowWithFavoriteMenu(
-                            node = child,
-                            prefsManager = prefsManager,
-                            isListScrolling = isListScrolling,
-                            onOpenCategory = onOpenCategory,
-                            onOpenAppList = onOpenAppList,
-                            onOpenManager = onOpenManager,
-                            onPreferenceChanged = onPreferenceChanged,
-                            favoriteNodeIds = favoriteNodeIds,
-                            resolveFavoriteNodeId = resolveFavoriteNodeId,
-                            onToggleFavorite = onToggleFavorite,
-                        )
-                    }
-                }
-            } else {
-                Card(
-                    modifier = Modifier
-                        .padding(top = topPadding)
-                        .fillMaxWidth()
-                ) {
-                    ConfigNodeRowWithFavoriteMenu(
-                        node = node,
-                        prefsManager = prefsManager,
-                        isListScrolling = isListScrolling,
-                        onOpenCategory = onOpenCategory,
-                        onOpenAppList = onOpenAppList,
-                        onOpenManager = onOpenManager,
-                        onPreferenceChanged = onPreferenceChanged,
-                        favoriteNodeIds = favoriteNodeIds,
-                        resolveFavoriteNodeId = resolveFavoriteNodeId,
-                        onToggleFavorite = onToggleFavorite,
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-internal fun ConfigNodeRowWithFavoriteMenu(
-    node: ConfigNode,
-    prefsManager: PrefsManager,
-    isListScrolling: Boolean,
-    onOpenCategory: (ConfigCategory) -> Unit,
-    onOpenAppList: (ConfigItem) -> Unit,
-    onOpenManager: (ConfigItem) -> Unit,
-    onPreferenceChanged: (ConfigItem) -> Unit = {},
-    favoriteNodeIds: Set<String>,
-    resolveFavoriteNodeId: (ConfigNode) -> String?,
-    onToggleFavorite: (ConfigNode) -> Unit,
-) {
-    val favoriteNodeId = resolveFavoriteNodeId(node)
-    val canFavorite = favoriteNodeId != null
-    val isFavorite = favoriteNodeId != null && favoriteNodeIds.contains(favoriteNodeId)
-    val favoriteIconTint = rememberFavoriteIconTint()
-    var showFavoritePopup by remember(favoriteNodeId) { mutableStateOf(false) }
-
-    Box(
-        modifier = Modifier.configNodeLongPress(
-            enabled = canFavorite,
-            isScrolling = isListScrolling,
-            onLongPress = { showFavoritePopup = true },
-        )
-    ) {
+    val renderNode: @Composable (ConfigNode) -> Unit = { node ->
         ConfigNodeRow(
             node = node,
             prefsManager = prefsManager,
@@ -925,185 +742,49 @@ internal fun ConfigNodeRowWithFavoriteMenu(
             onOpenManager = onOpenManager,
             onPreferenceChanged = onPreferenceChanged,
         )
-
-        if (canFavorite) {
-            OverlayListPopup(
-                show = showFavoritePopup,
-                popupModifier = Modifier,
-                popupPositionProvider = ListPopupDefaults.DropdownPositionProvider,
-                alignment = PopupPositionProvider.Align.Start,
-                enableWindowDim = true,
-                onDismissRequest = { showFavoritePopup = false },
-                maxHeight = null,
-                minWidth = 180.dp,
-                renderInRootScaffold = true,
+    }
+    val sections = nodes.map { node ->
+        if (node is ConfigGroup) {
+            node.titleRes?.let { stringResource(it) } to node.children
+        } else {
+            null to listOf(node)
+        }
+    }
+    val spacing = 12.dp
+    CompositionLocalProvider(LocalMochiListItemSpacing provides spacing) {
+        ProvideMochiOverscroll {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(
+                    start = ConfigUi.HorizontalInset,
+                    end = ConfigUi.HorizontalInset,
+                    top = 8.dp,
+                    bottom = contentPadding.calculateBottomPadding() + 16.dp,
+                ),
+                verticalArrangement = Arrangement.spacedBy(spacing),
+                flingBehavior = MochiScrollDefaults.flingBehavior(),
             ) {
-                ListPopupColumn {
-                    DropdownImpl(
-                        item = DropdownItem(
-                            icon = { iconModifier ->
-                                FavoritePopupIcon(
-                                    isFavorite = isFavorite,
-                                    tint = favoriteIconTint,
-                                    modifier = iconModifier,
-                                )
-                            },
-                            title = stringResource(
-                                if (isFavorite) {
-                                    R.string.config_favorite_remove
-                                } else {
-                                    R.string.config_favorite_add
-                                }
+                if (onOpenBackup != null) {
+                    mochiListSection("backup_restore") {
+                        row {
+                            MochiListRow(
+                                title = stringResource(R.string.seine_backup_title),
+                                subtitle = stringResource(R.string.seine_backup_summary),
+                                chevron = true,
+                                onClick = onOpenBackup,
                             )
-                        ),
-                        optionSize = 1,
-                        isSelected = false,
-                        index = 0,
-                        dropdownColors = DropdownDefaults.dropdownColors(),
-                        onSelectedIndexChange = {
-                            onToggleFavorite(node)
-                        },
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun rememberFavoriteIconTint(): Color {
-    return lerp(
-        start = MiuixTheme.colorScheme.error,
-        stop = MiuixTheme.colorScheme.errorContainer,
-        fraction = 0.32f,
-    )
-}
-
-@Composable
-private fun FavoritePopupIcon(
-    isFavorite: Boolean,
-    tint: Color,
-    modifier: Modifier = Modifier,
-) {
-    if (isFavorite) {
-        Icon(
-            imageVector = Icons.Rounded.FavoriteBorder,
-            contentDescription = null,
-            tint = tint,
-            modifier = modifier.size(20.dp),
-        )
-    } else {
-        Box(
-            modifier = modifier.size(22.dp),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(
-                imageVector = Icons.Rounded.Favorite,
-                contentDescription = null,
-                tint = tint,
-                modifier = Modifier.size(20.dp),
-            )
-        }
-    }
-}
-
-private fun Modifier.configNodeLongPress(
-    enabled: Boolean,
-    isScrolling: Boolean,
-    onLongPress: () -> Unit,
-): Modifier {
-    if (!enabled || isScrolling) return this
-
-    return this.pointerInput(onLongPress, false) {
-        awaitEachGesture {
-            val down = awaitFirstDown(
-                requireUnconsumed = false,
-                pass = PointerEventPass.Initial,
-            )
-            if (isScrolling) return@awaitEachGesture
-            val longPressTriggered = withTimeoutOrNull(
-                timeMillis = viewConfiguration.longPressTimeoutMillis,
-            ) {
-                while (true) {
-                    val event = awaitPointerEvent(PointerEventPass.Initial)
-                    val change = event.changes.firstOrNull { it.id == down.id }
-                        ?: return@withTimeoutOrNull false
-                    if (!change.pressed || change.isConsumed || change.positionChanged() || isScrolling) {
-                        return@withTimeoutOrNull false
+                        }
                     }
                 }
-            } == null
-
-            if (longPressTriggered) {
-                onLongPress()
-
-                var released = false
-                while (!released) {
-                    val event = awaitPointerEvent(PointerEventPass.Initial)
-                    event.changes.forEach { change ->
-                        if (change.id == down.id) {
-                            change.consume()
-                            if (!change.pressed) {
-                                released = true
-                            }
+                sections.forEachIndexed { index, section ->
+                    val (header, entries) = section
+                    mochiListSection(entries.firstOrNull()?.key ?: "node_" + index, header = header) {
+                        rows(entries.size, key = { entries[it].key ?: it }) { childIndex ->
+                            renderNode(entries[childIndex])
                         }
                     }
                 }
             }
         }
     }
-}
-
-private fun buildFavoriteConfigNodeIndex(
-    nodes: List<ConfigNode>,
-    resolveResourceEntryName: (Int) -> String,
-): FavoriteConfigNodeIndex {
-    val entries = mutableListOf<FavoriteConfigNodeEntry>()
-    val nodeIdLookup = IdentityHashMap<ConfigNode, String>()
-    val idCounters = mutableMapOf<String, Int>()
-
-    fun nextNodeId(counters: MutableMap<String, Int>, baseId: String): String {
-        val current = (counters[baseId] ?: 0) + 1
-        counters[baseId] = current
-        return if (current == 1) {
-            baseId
-        } else {
-            "$baseId#$current"
-        }
-    }
-
-    fun registerNode(node: ConfigNode, nodeId: String) {
-        entries += FavoriteConfigNodeEntry(id = nodeId, node = node)
-        nodeIdLookup[node] = nodeId
-    }
-
-    fun walk(currentNodes: List<ConfigNode>, categoryPath: List<String>) {
-        currentNodes.forEach { node ->
-            when (node) {
-                is ConfigCategory -> {
-                    val pathToken = node.key?.let { "key:$it" }
-                        ?: "title:${resolveResourceEntryName(node.titleRes)}"
-                    val baseId = "category:path:${(categoryPath + pathToken).joinToString("/")}"
-                    val nodeId = nextNodeId(idCounters, baseId)
-                    registerNode(node, nodeId)
-                    walk(node.children, categoryPath + pathToken)
-                }
-
-                is ConfigGroup -> {
-                    walk(node.children, categoryPath)
-                }
-
-                is ConfigItem -> {
-                    val nodeId = nextNodeId(idCounters, "item:key:${node.key}")
-                    registerNode(node, nodeId)
-                }
-            }
-        }
-    }
-
-    walk(nodes, emptyList())
-    return FavoriteConfigNodeIndex(
-        entries = entries,
-        nodeIdLookup = nodeIdLookup,
-    )
 }

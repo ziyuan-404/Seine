@@ -20,6 +20,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -48,6 +49,8 @@ import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import hk.uwu.reareye.R
+import hk.uwu.reareye.ui.components.LocalRearSearchBarStyle
+import hk.uwu.reareye.ui.config.ModuleSearchBarStyle
 import hk.uwu.reareye.ui.config.ConfigCategory
 import hk.uwu.reareye.ui.config.ConfigItem
 import top.yukonga.miuix.kmp.basic.Card
@@ -191,7 +194,10 @@ private fun StableSearchInputField(
     val currentOnValueChange by rememberUpdatedState(onValueChange)
     val textColor = MiuixTheme.colorScheme.onSurface
     val secondaryColor = MiuixTheme.colorScheme.onSurfaceContainerHigh
-    val capsuleColor = MiuixTheme.colorScheme.surfaceContainerHigh
+    val isMiuix = LocalRearSearchBarStyle.current == ModuleSearchBarStyle.MIUIX
+    val capsuleColor = if (isMiuix) MiuixTheme.colorScheme.surfaceContainerHigh
+        else MiuixTheme.colorScheme.secondaryContainer
+    val shape = if (isMiuix) CircleShape else RoundedCornerShape(14.dp)
 
     BasicTextField(
         value = value,
@@ -210,7 +216,7 @@ private fun StableSearchInputField(
                 modifier = Modifier
                     .fillMaxWidth()
                     .heightIn(min = 45.dp)
-                    .background(capsuleColor, CircleShape),
+                    .background(capsuleColor, shape),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Icon(

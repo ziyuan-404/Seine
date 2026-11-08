@@ -9,108 +9,111 @@ import android.os.Looper
 import android.os.ResultReceiver
 import android.util.Base64
 import android.widget.Toast
+import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.systemBars
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.BugReport
-import androidx.compose.material.icons.outlined.CheckCircle
-import androidx.compose.material.icons.outlined.CrueltyFree
-import androidx.compose.material.icons.outlined.DoNotDisturb
-import androidx.compose.material.icons.outlined.Lock
-import androidx.compose.material.icons.outlined.Sync
-import androidx.compose.material.icons.outlined.Warning
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.lerp
-import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.onLongClick
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.core.net.toUri
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
-import com.composables.icons.materialsymbols.MaterialSymbols
-import com.composables.icons.materialsymbols.rounded.Frame_bug
 import hk.uwu.reareye.R
-import hk.uwu.reareye.generated.AppProperties
+import hk.uwu.reareye.ui.components.SeineMenuDefaults
 import hk.uwu.reareye.hook.support.ModuleActivationState
 import hk.uwu.reareye.hook.support.XposedModuleStatus
-import hk.uwu.reareye.ui.components.PresetPackLocalStatus
-import hk.uwu.reareye.ui.components.PresetPackStatusCard
-import hk.uwu.reareye.ui.components.isNewerThan
-import hk.uwu.reareye.ui.components.motion.ArtVisibilityMotion
-import hk.uwu.reareye.ui.components.rememberPresetPackHomeSnapshot
+import hk.uwu.reareye.ui.components.SeineSupportCard
+import hk.uwu.reareye.ui.components.SeineWordmark
+import hk.uwu.reareye.ui.components.config.ConfigCard
+import hk.uwu.reareye.ui.config.RearAppDefaults
+import hk.uwu.reareye.ui.config.RearNotificationDefaults
+import hk.uwu.reareye.ui.config.rememberRemotePrefsStatusRevision
+import hk.uwu.reareye.utils.other.DeviceConfigTools
 import hk.uwu.reareye.ui.config.ConfigKeys
 import hk.uwu.reareye.ui.config.PrefsManager.Companion.getPrefsManager
 import hk.uwu.reareye.ui.easteregg.EasterEggManager
 import hk.uwu.reareye.ui.easteregg.EasterEggType
 import hk.uwu.reareye.ui.featureGuideAnchor
 import hk.uwu.reareye.ui.theme.AppThemeMode
-import hk.uwu.reareye.ui.theme.rearAcrylicEffect
-import hk.uwu.reareye.ui.theme.rearAcrylicSource
-import hk.uwu.reareye.ui.theme.rememberAcrylicHazeState
-import hk.uwu.reareye.ui.theme.rememberAcrylicHazeStyle
 import hk.uwu.reareye.utils.RootHelper
+import hk.uwu.reareye.version.SeineProject
+import hk.uwu.reareye.version.SeineRelease
+import kotlinx.collections.immutable.toPersistentList
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
-import okhttp3.OkHttpClient
-import okhttp3.Request
-import org.json.JSONObject
-import top.yukonga.miuix.kmp.basic.Card
-import top.yukonga.miuix.kmp.basic.CardDefaults
-import top.yukonga.miuix.kmp.basic.DropdownDefaults
-import top.yukonga.miuix.kmp.basic.DropdownImpl
-import top.yukonga.miuix.kmp.basic.DropdownItem
-import top.yukonga.miuix.kmp.basic.Icon
-import top.yukonga.miuix.kmp.basic.IconButton
-import top.yukonga.miuix.kmp.basic.ListPopupColumn
-import top.yukonga.miuix.kmp.basic.ListPopupDefaults
-import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
-import top.yukonga.miuix.kmp.basic.PopupPositionProvider
-import top.yukonga.miuix.kmp.basic.Scaffold
-import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.basic.TopAppBar
-import top.yukonga.miuix.kmp.icon.MiuixIcons
-import top.yukonga.miuix.kmp.icon.extended.MoreCircle
-import top.yukonga.miuix.kmp.overlay.OverlayListPopup
 import top.yukonga.miuix.kmp.theme.MiuixTheme
-import top.yukonga.miuix.kmp.utils.PressFeedbackType
-import top.yukonga.miuix.kmp.utils.overScrollVertical
-import top.yukonga.miuix.kmp.utils.scrollEndHaptic
+import ui.feice.mochi.basic.MochiDropdown
+import ui.feice.mochi.basic.MochiItem
+import ui.feice.mochi.basic.Text
+import ui.feice.mochi.icons.MochiIonicon
+import ui.feice.mochi.list.MochiListCard
+import ui.feice.mochi.list.MochiListDefaults
+import ui.feice.mochi.list.MochiListRow
+import ui.feice.mochi.list.MochiListSection
+import ui.feice.mochi.navigation.LocalMochiBottomBarInset
+import ui.feice.mochi.navigation.MochiLazyCompactTitleScaffold
+import ui.feice.mochi.shape.MochiCapsule
+import ui.feice.mochi.shape.MochiRoundedRectangle
+import ui.feice.mochi.theme.MochiTheme
 
-private val updateInfoHttpClient = OkHttpClient()
+private val HomeComponentPackages = listOf(
+    R.string.subsceen_version to "com.xiaomi.subscreencenter",
+    R.string.seine_home_assistant_version to "com.miui.personalassistant",
+    R.string.seine_home_themes_version to "com.android.thememanager",
+)
 
 private object UpdateInfoCache {
     val lock = Mutex()
-    var latestCommitHash: String? = null
+    var latestRelease: SeineRelease? = null
 }
 
 private class ToastHolder {
@@ -138,20 +141,17 @@ private data class StatusCardPalette(
     val container: Color,
     val icon: Color,
     val title: Color,
-    val summary: Color,
 )
 
 private fun customStatusCardPalette(
     container: Color,
     icon: Color,
     title: Color,
-    summary: Color,
 ): StatusCardPalette {
     return StatusCardPalette(
         container = container,
         icon = icon,
         title = title,
-        summary = summary,
     )
 }
 
@@ -161,7 +161,6 @@ private fun rememberStatusCardPalette(
     containerStrength: Float = 0.22f,
     iconStrength: Float = 0.86f,
     titleStrength: Float = 0.46f,
-    summaryStrength: Float = 0.28f,
 ): StatusCardPalette {
     val colorScheme = MiuixTheme.colorScheme
 
@@ -173,13 +172,11 @@ private fun rememberStatusCardPalette(
         containerStrength,
         iconStrength,
         titleStrength,
-        summaryStrength,
     ) {
         StatusCardPalette(
             container = lerp(colorScheme.surface, accent, containerStrength),
             icon = lerp(colorScheme.onSurfaceVariantSummary, accent, iconStrength),
             title = lerp(colorScheme.onSurface, accent, titleStrength),
-            summary = lerp(colorScheme.onSurfaceVariantSummary, accent, summaryStrength),
         )
     }
 }
@@ -243,52 +240,21 @@ private fun decodeFrameToken(index: Int): String {
     return String(Base64.decode(value, Base64.NO_WRAP), Charsets.UTF_8)
 }
 
-private suspend fun fetchLatestCommitHashFromNetwork(): String? {
-    return withContext(Dispatchers.IO) {
-        runCatching {
-            val branchParts = AppProperties.GIT_BRANCH.split("/")
-            val owner = branchParts.getOrNull(0) ?: "killerprojecte"
-            val repo = branchParts.getOrNull(1) ?: "REAREye"
-            val branch = branchParts.getOrNull(2)?.takeIf { it.isNotBlank() && it != "unknown" }
-                ?: "master"
-            val request = Request.Builder()
-                .url("https://api.github.com/repos/$owner/$repo/commits/$branch")
-                .build()
-            val response = updateInfoHttpClient.newCall(request).execute()
-            if (response.isSuccessful) {
-                JSONObject(response.body.string()).optString("sha", "").take(7).ifBlank { null }
-            } else {
-                null
-            }
-        }.getOrNull()
-    }
-}
-
 @SuppressLint("LocalContextGetResourceValueCall")
 @Composable
 fun HomeScreen(
     bottomInnerPadding: Dp = 0.dp,
-    onOpenPresetPackDialog: () -> Unit = {},
-    presetPackRefreshToken: Any? = Unit,
+    onOpenSponsor: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     var activationState by remember { mutableStateOf(XposedModuleStatus.current()) }
     val isActivated = activationState == ModuleActivationState.ACTIVE
     val showTopMenu = remember { mutableStateOf(false) }
-    val scrollBehavior = MiuixScrollBehavior()
     val prefsManager = remember { context.getPrefsManager() }
-    val hazeState = rememberAcrylicHazeState()
-    val hazeStyle = rememberAcrylicHazeStyle()
     val coroutineScope = rememberCoroutineScope()
     val easterEggToastHolder = remember { ToastHolder() }
-    val presetPackHomeSnapshot = rememberPresetPackHomeSnapshot(presetPackRefreshToken)
-    val presetPackSnapshot = presetPackHomeSnapshot.local
-    val presetPackUpdateAvailable = presetPackHomeSnapshot.latest?.isNewerThan(
-        presetPackSnapshot.installed?.manifest?.packVersion,
-    ) == true
-
-    var latestCommitHash by remember { mutableStateOf<String?>(null) }
+    var latestRelease by remember { mutableStateOf<SeineRelease?>(null) }
     var isCheckingUpdate by remember { mutableStateOf(false) }
     var hasRootAccess by remember { mutableStateOf<Boolean?>(null) }
     val frameNotice = FrameNoticeCache.value
@@ -312,11 +278,11 @@ fun HomeScreen(
     DisposableEffect(lifecycleOwner) {
         val statusObserver: (ModuleActivationState) -> Unit = { activationState = it }
         val lifecycleObserver = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME) XposedModuleStatus.refresh()
+            if (event == Lifecycle.Event.ON_RESUME) XposedModuleStatus.refreshAsync()
         }
         XposedModuleStatus.observe(statusObserver)
         lifecycleOwner.lifecycle.addObserver(lifecycleObserver)
-        XposedModuleStatus.refresh()
+        XposedModuleStatus.refreshAsync()
         onDispose {
             lifecycleOwner.lifecycle.removeObserver(lifecycleObserver)
             XposedModuleStatus.removeObserver(statusObserver)
@@ -324,20 +290,11 @@ fun HomeScreen(
     }
 
     LaunchedEffect(Unit) {
-        if (!UpdateInfoCache.latestCommitHash.isNullOrBlank()) {
-            latestCommitHash = UpdateInfoCache.latestCommitHash
-            return@LaunchedEffect
-        }
-
         isCheckingUpdate = true
-        latestCommitHash = UpdateInfoCache.lock.withLock {
-            if (UpdateInfoCache.latestCommitHash.isNullOrBlank()) {
-                val fetchedHash = fetchLatestCommitHashFromNetwork()
-                if (!fetchedHash.isNullOrBlank()) {
-                    UpdateInfoCache.latestCommitHash = fetchedHash
-                }
+        latestRelease = UpdateInfoCache.lock.withLock {
+            UpdateInfoCache.latestRelease ?: SeineProject.latestRelease()?.also {
+                UpdateInfoCache.latestRelease = it
             }
-            UpdateInfoCache.latestCommitHash
         }
         isCheckingUpdate = false
     }
@@ -350,14 +307,14 @@ fun HomeScreen(
 
     val statusTitle = if (isActivated) {
         when (easterEggType) {
-            EasterEggType.APRIL_FOOLS -> androidx.compose.ui.res.stringResource(R.string.home_easter_egg_april_fools_working)
-            EasterEggType.EASTER -> androidx.compose.ui.res.stringResource(R.string.home_easter_egg_easter_working)
-            EasterEggType.MI_FANS -> androidx.compose.ui.res.stringResource(R.string.home_easter_egg_mifans_working)
-            EasterEggType.HUAWEI_ULTIMATE_DESIGN -> androidx.compose.ui.res.stringResource(R.string.home_easter_egg_huawei_ultimate_design_working)
-            else -> androidx.compose.ui.res.stringResource(R.string.home_status_working)
+            EasterEggType.APRIL_FOOLS -> stringResource(R.string.home_easter_egg_april_fools_working)
+            EasterEggType.EASTER -> stringResource(R.string.home_easter_egg_easter_working)
+            EasterEggType.MI_FANS -> stringResource(R.string.home_easter_egg_mifans_working)
+            EasterEggType.HUAWEI_ULTIMATE_DESIGN -> stringResource(R.string.home_easter_egg_huawei_ultimate_design_working)
+            else -> stringResource(R.string.seine_home_active)
         }
     } else {
-        androidx.compose.ui.res.stringResource(
+        stringResource(
             when (activationState) {
                 ModuleActivationState.SERVICE_UNAVAILABLE -> R.string.home_status_service_unavailable
                 ModuleActivationState.SCOPE_NOT_AUTHORIZED -> R.string.home_status_scope_not_authorized
@@ -366,296 +323,199 @@ fun HomeScreen(
             }
         )
     }
-    val normalizedCurrentHash = AppProperties.GIT_HASH.take(7).lowercase()
-    val normalizedLatestHash = latestCommitHash?.take(7)?.lowercase()
-    val showUpdateWarning =
-        !isCheckingUpdate && !normalizedLatestHash.isNullOrBlank() && normalizedLatestHash != normalizedCurrentHash
-    val showFrameNotice = frameNotice != null
     val showRootWarning = hasRootAccess == false
-    val rootWarningDelay = if (showFrameNotice) 150 else 100
-    val updateInfoDelay = when {
-        showFrameNotice && showRootWarning -> 200
-        showFrameNotice || showRootWarning -> 150
-        else -> 100
+
+    val revision = rememberRemotePrefsStatusRevision()
+    var counts by remember { mutableStateOf<Pair<Int, Int>?>(null) }
+    var framework by remember { mutableStateOf<String?>(null) }
+    val systemVersion = remember {
+        DeviceConfigTools.getSystemProperties("ro.mi.os.version.incremental")
+            .ifBlank { android.os.Build.VERSION.INCREMENTAL }
+    }
+    val componentVersions by produceState<Map<Int, String?>>(emptyMap(), context) {
+        value = withContext(Dispatchers.IO) {
+            HomeComponentPackages.associate { (label, packageName) ->
+                label to DeviceConfigTools.getPackageVersion(context, packageName)
+            }
+        }
+    }
+    LaunchedEffect(revision, activationState) {
+        withContext(Dispatchers.IO) {
+            val applications = if (prefsManager.getBoolean(ConfigKeys.REAR_APP_ENABLED, RearAppDefaults.ENABLED)) {
+                prefsManager.getStringSet(ConfigKeys.ACTIVITIES_WHITELIST_APPS, RearAppDefaults.ALLOWED_APPS).size
+            } else 0
+            val notifications = if (prefsManager.getBoolean(ConfigKeys.REAR_NOTIFICATION_SYNC, RearNotificationDefaults.ENABLED)) {
+                RearNotificationDefaults.resolve(
+                    prefsManager.getStringSet(ConfigKeys.REAR_NOTIFICATION_SYNC_APPS, RearNotificationDefaults.APPS),
+                    context.packageManager,
+                ).size
+            } else 0
+            (applications to notifications) to XposedModuleStatus.frameworkDescription()
+        }.let { (appCounts, xposed) ->
+            counts = appCounts
+            framework = xposed
+        }
+    }
+    val quickActionLabels = listOf(
+        stringResource(R.string.quick_stop_subscreencenter),
+        stringResource(R.string.quick_stop_thememanager),
+        stringResource(R.string.quick_stop_personalassistant),
+        stringResource(R.string.quick_stop_systemui),
+    )
+    val quickActions = remember(quickActionLabels) {
+        quickActionLabels.map { MochiItem(it) }.toPersistentList()
     }
 
-    val appTitle = when (easterEggType) {
-        EasterEggType.APRIL_FOOLS -> "FOOLEye"
-        EasterEggType.EASTER -> "BUNNYEgg"
-        EasterEggType.MI_FANS -> "JINFan"
-        EasterEggType.HUAWEI_ULTIMATE_DESIGN -> "Rate XT 非凡大师"
-        else -> "REAREye"
+    val compactOverview = LocalConfiguration.current.screenWidthDp >= 350 &&
+        LocalDensity.current.fontScale <= 1.3f
+    val listState = rememberLazyListState()
+    val wordmarkHeight = 48.dp
+    val wordmarkHeightPx = with(LocalDensity.current) { wordmarkHeight.roundToPx() }
+    val titleCollapsed by remember(listState, wordmarkHeightPx) {
+        derivedStateOf {
+            listState.firstVisibleItemIndex > 0 ||
+                listState.firstVisibleItemScrollOffset >= wordmarkHeightPx
+        }
     }
-    val moduleVersion = when (easterEggType) {
-        EasterEggType.APRIL_FOOLS -> "4.1.0-41f001u-r${AppProperties.BUILD_NUMBER}-fool"
-        EasterEggType.EASTER -> "7.7.7-holyegg-r${AppProperties.BUILD_NUMBER}-rebirth"
-        EasterEggType.MI_FANS -> "本彩蛋仅为娱乐用途\n不代表开发者或任何组织的立场或观点"
-        EasterEggType.HUAWEI_ULTIMATE_DESIGN -> "38.0-harmony-r${AppProperties.BUILD_NUMBER}-ultimate"
-        else -> "${AppProperties.PROJECT_APP_VERSION_NAME}-${AppProperties.GIT_HASH}-r${AppProperties.BUILD_NUMBER}-${AppProperties.BUILD_CHANNEL}"
-    }
-    val releaseChannel = when (easterEggType) {
-        EasterEggType.APRIL_FOOLS -> "Oops"
-        EasterEggType.EASTER -> "Respawn Entertainment"
-        EasterEggType.MI_FANS -> "HyperOS Beta"
-        EasterEggType.HUAWEI_ULTIMATE_DESIGN -> "ULTIMATE DESIGN"
-        else -> AppProperties.BUILD_CHANNEL
-    }
-    val versionCodename = AppProperties.PROJECT_APP_VERSION_CODENAME
-
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                modifier = Modifier.rearAcrylicEffect(hazeState, hazeStyle),
-                color = Color.Transparent,
-                title = appTitle,
-                actions = {
-                    Box {
-                        IconButton(
-                            onClick = { showTopMenu.value = true },
-                            holdDownState = showTopMenu.value,
-                        ) {
-                            Icon(
-                                imageVector = MiuixIcons.Regular.MoreCircle,
-                                contentDescription = null,
-                                tint = MiuixTheme.colorScheme.onBackground,
-                            )
-                        }
-
-                        OverlayListPopup(
-                            show = showTopMenu.value,
-                            popupModifier = Modifier,
-                            popupPositionProvider = ListPopupDefaults.DropdownPositionProvider,
-                            alignment = PopupPositionProvider.Align.End,
-                            enableWindowDim = true,
-                            onDismissRequest = { showTopMenu.value = false },
-                            maxHeight = null,
-                            minWidth = 220.dp,
-                            renderInRootScaffold = true,
-                        ) {
-                            @SuppressLint("LocalContextGetResourceValueCall")
-                            ListPopupColumn {
-                                Spacer(modifier = Modifier.height(4.dp))
-
-                                DropdownImpl(
-                                    item = DropdownItem(
-                                        title = androidx.compose.ui.res.stringResource(
-                                            R.string.quick_stop_subscreencenter,
-                                        ),
-                                    ),
-                                    optionSize = 4,
-                                    isSelected = false,
-                                    index = 0,
-                                    dropdownColors = DropdownDefaults.dropdownColors(),
-                                    onSelectedIndexChange = {
-                                        showTopMenu.value = false
-
-                                        coroutineScope.launch {
-                                            forceStopPackageByRoot(
-                                                context = context,
-                                                packageName = "com.xiaomi.subscreencenter",
-                                                appName = context.getString(R.string.category_subscreencenter),
-                                            )
-                                        }
-                                    },
+    CompositionLocalProvider(LocalMochiBottomBarInset provides bottomInnerPadding) {
+        MochiLazyCompactTitleScaffold(
+            title = "",
+            listState = listState,
+            navigationIcon = {
+                if (titleCollapsed) {
+                    SeineWordmark(width = 76.dp, color = MochiTheme.colorScheme.onSurface)
+                }
+            },
+            actions = {
+                MochiDropdown(
+                    behavior = SeineMenuDefaults.Trailing,
+                    expanded = showTopMenu.value,
+                    onExpandedChange = { showTopMenu.value = it },
+                    items = quickActions,
+                    menuWidth = 256.dp,
+                    buttonMinWidth = 48.dp,
+                    buttonMinHeight = 48.dp,
+                    buttonPadding = PaddingValues(0.dp),
+                    onItemClick = { index ->
+                        coroutineScope.launch {
+                            when (index) {
+                                0 -> forceStopPackageByRoot(
+                                    context, "com.xiaomi.subscreencenter",
+                                    context.getString(R.string.category_subscreencenter),
                                 )
-
-                                DropdownImpl(
-                                    item = DropdownItem(
-                                        title = androidx.compose.ui.res.stringResource(
-                                            R.string.quick_stop_thememanager,
-                                        ),
-                                    ),
-                                    optionSize = 4,
-                                    isSelected = false,
-                                    index = 1,
-                                    dropdownColors = DropdownDefaults.dropdownColors(),
-                                    onSelectedIndexChange = {
-                                        showTopMenu.value = false
-                                        coroutineScope.launch {
-                                            forceStopPackageByRoot(
-                                                context = context,
-                                                packageName = "com.android.thememanager",
-                                                appName = context.getString(R.string.category_thememanager),
-                                            )
-                                        }
-                                    },
+                                1 -> forceStopPackageByRoot(
+                                    context, "com.android.thememanager",
+                                    context.getString(R.string.category_thememanager),
                                 )
-
-                                DropdownImpl(
-                                    item = DropdownItem(
-                                        title = androidx.compose.ui.res.stringResource(
-                                            R.string.quick_stop_personalassistant,
-                                        ),
-                                    ),
-                                    optionSize = 4,
-                                    isSelected = false,
-                                    index = 2,
-                                    dropdownColors = DropdownDefaults.dropdownColors(),
-                                    onSelectedIndexChange = {
-                                        showTopMenu.value = false
-                                        coroutineScope.launch {
-                                            forceStopPackageByRoot(
-                                                context = context,
-                                                packageName = "com.miui.personalassistant",
-                                                appName = context.getString(R.string.category_personalassistant),
-                                            )
-                                        }
-                                    },
+                                2 -> forceStopPackageByRoot(
+                                    context, "com.miui.personalassistant",
+                                    context.getString(R.string.category_personalassistant),
                                 )
-
-                                DropdownImpl(
-                                    item = DropdownItem(
-                                        title = androidx.compose.ui.res.stringResource(
-                                            R.string.quick_stop_systemui,
-                                        ),
-                                    ),
-                                    optionSize = 4,
-                                    isSelected = false,
-                                    index = 3,
-                                    dropdownColors = DropdownDefaults.dropdownColors(),
-                                    onSelectedIndexChange = {
-                                        showTopMenu.value = false
-                                        coroutineScope.launch {
-                                            forceKillSystemUI(context)
-                                        }
-                                    },
-                                )
-
-                                Spacer(modifier = Modifier.height(2.dp))
-
+                                3 -> forceKillSystemUI(context)
                             }
                         }
-                    }
-                },
-                scrollBehavior = scrollBehavior,
-            )
-        },
-        contentWindowInsets = WindowInsets.systemBars,
-    ) { paddingValues ->
-        var visible by remember { mutableStateOf(false) }
-        LaunchedEffect(Unit) { visible = true }
-
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .scrollEndHaptic()
-                .overScrollVertical()
-                .nestedScroll(scrollBehavior.nestedScrollConnection)
-                .rearAcrylicSource(hazeState)
-                .padding(horizontal = 12.dp),
-            contentPadding = PaddingValues(
-                top = paddingValues.calculateTopPadding() + 12.dp,
-                bottom = paddingValues.calculateBottomPadding() + bottomInnerPadding + 12.dp,
-            ),
-            overscrollEffect = null,
+                    },
+                ) {
+                    MochiIonicon("ellipsis-horizontal", contentDescription = stringResource(R.string.config_tab_more))
+                }
+            },
         ) {
-            item {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    RevealItem(visible = visible, delayMillis = 0) {
-                        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                            WorkingStatusCard(
-                                statusTitle = statusTitle,
-                                statusVersion = AppProperties.BUILD_NUMBER.toString(),
-                                activated = isActivated,
-                                easterEggType = easterEggType,
-                                useMonetColors = useMonetStatusColors,
-                                onLongPress = {
-                                    val result =
-                                        EasterEggManager.toggleTodayEasterEggEnabled(context)
-                                    if (!result.matchedToday) {
-                                        showSingleToast(
-                                            context = context,
-                                            holder = easterEggToastHolder,
-                                            message = context.getString(R.string.home_easter_egg_no_today),
-                                        )
-                                        return@WorkingStatusCard
-                                    }
-
-                                    easterEggType =
-                                        EasterEggManager.getCurrentEasterEggType(context)
-                                    val eggName = context.getString(result.type.toTitleRes())
-                                    val messageRes = when {
-                                        result.isEnabled -> R.string.home_easter_egg_enabled
-                                        else -> R.string.home_easter_egg_disabled
-                                    }
-                                    showSingleToast(
-                                        context = context,
-                                        holder = easterEggToastHolder,
-                                        message = context.getString(messageRes, eggName),
-                                    )
-                                },
-                            )
-
-                            frameNotice?.let { notice ->
-                                FrameNoticeCard(
-                                    title = notice.title,
-                                    summary = notice.summary,
-                                    useMonetColors = useMonetStatusColors,
+            item(key = "wordmark") {
+                SeineWordmark(
+                    width = 180.dp,
+                    color = MochiTheme.colorScheme.onSurface,
+                    modifier = Modifier.height(wordmarkHeight),
+                )
+            }
+            item(key = "status") {
+                val status: @Composable (Modifier) -> Unit = { cardModifier ->
+                    WorkingStatusCard(
+                        modifier = cardModifier,
+                        compact = compactOverview,
+                        statusTitle = statusTitle,
+                        frameworkVersion = framework?.takeIf { isActivated },
+                        activated = isActivated,
+                        easterEggType = easterEggType,
+                        useMonetColors = useMonetStatusColors,
+                        onLongPress = {
+                            val result = EasterEggManager.toggleTodayEasterEggEnabled(context)
+                            if (!result.matchedToday) {
+                                showSingleToast(
+                                    context,
+                                    easterEggToastHolder,
+                                    context.getString(R.string.home_easter_egg_no_today),
                                 )
+                                return@WorkingStatusCard
                             }
-
-                            if (showRootWarning) {
-                                RevealItem(visible = visible, delayMillis = rootWarningDelay) {
-                                    RootWarningCard(useMonetColors = useMonetStatusColors)
-                                }
+                            easterEggType = EasterEggManager.getCurrentEasterEggType(context)
+                            val eggName = context.getString(result.type.toTitleRes())
+                            val messageRes = if (result.isEnabled) {
+                                R.string.home_easter_egg_enabled
+                            } else {
+                                R.string.home_easter_egg_disabled
                             }
-
-                            if (showUpdateWarning) {
-                                UpdateWarningCard(
-                                    currentHash = AppProperties.GIT_HASH.take(7),
-                                    latestHash = latestCommitHash?.take(7).orEmpty(),
-                                    useMonetColors = useMonetStatusColors,
-                                )
-                            }
-
-                            if (presetPackSnapshot.status == PresetPackLocalStatus.NOT_INSTALLED ||
-                                presetPackSnapshot.status == PresetPackLocalStatus.INVALID ||
-                                presetPackUpdateAvailable
-                            ) {
-                                PresetPackStatusCard(
-                                    snapshot = presetPackSnapshot,
-                                    updateAvailable = presetPackUpdateAvailable,
-                                    latestVersion = presetPackHomeSnapshot.latest?.version,
-                                    useMonetColors = useMonetStatusColors,
-                                    onClick = onOpenPresetPackDialog,
-                                )
-                            }
-                        }
+                            showSingleToast(context, easterEggToastHolder, context.getString(messageRes, eggName))
+                        },
+                    )
+                }
+                val countCards: @Composable (Modifier) -> Unit = { modifier ->
+                    Column(modifier, verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        HomeCountTile(counts?.first, stringResource(R.string.seine_home_rear_apps))
+                        HomeCountTile(counts?.second, stringResource(R.string.seine_home_notification_apps))
                     }
-
-                    RevealItem(visible = visible, delayMillis = 50) {
-                        ModuleInfoCard(
-                            activationState = activationState,
-                            moduleVersion = moduleVersion,
-                            versionCodename = versionCodename,
-                            releaseChannel = releaseChannel,
-                            easterEggType = easterEggType
-                        )
+                }
+                if (compactOverview) {
+                    Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        status(Modifier.weight(1f).fillMaxHeight())
+                        countCards(Modifier.weight(1f))
                     }
-
-                    RevealItem(visible = visible, delayMillis = updateInfoDelay) {
-                        UpdateInfoCard(
-                            currentHash = when (easterEggType) {
-                                EasterEggType.APRIL_FOOLS -> "41f001u"
-                                EasterEggType.EASTER -> "holyegg"
-                                EasterEggType.MI_FANS -> "leijun"
-                                EasterEggType.HUAWEI_ULTIMATE_DESIGN -> "ultimate"
-                                else -> AppProperties.GIT_HASH
-                            },
-                            latestHash = when (easterEggType) {
-                                EasterEggType.APRIL_FOOLS if AppProperties.GIT_HASH == latestCommitHash -> "41f001u"
-                                EasterEggType.EASTER if AppProperties.GIT_HASH == latestCommitHash -> "candies"
-                                EasterEggType.MI_FANS if AppProperties.GIT_HASH == latestCommitHash -> "jinfan"
-                                EasterEggType.HUAWEI_ULTIMATE_DESIGN if AppProperties.GIT_HASH == latestCommitHash -> "design"
-                                else -> latestCommitHash
-                            },
-                            checking = isCheckingUpdate,
-                        )
+                } else {
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        status(Modifier.fillMaxWidth())
+                        countCards(Modifier.fillMaxWidth())
                     }
                 }
             }
-        }
+            frameNotice?.let { notice ->
+                item(key = "frame_notice") {
+                    HomeNotice(
+                        title = notice.title,
+                        summary = notice.summary,
+                        icon = "information-circle",
+                    )
+                }
+            }
+            if (showRootWarning) {
+                item(key = "root_warning") {
+                    HomeNotice(
+                        title = stringResource(R.string.home_root_warning_title),
+                        summary = stringResource(R.string.home_root_warning_desc),
+                        icon = "shield",
+                        isError = true,
+                    )
+                }
+            }
+            item(key = "system_info") {
+                ConfigCard {
+                    MochiListRow(stringResource(R.string.seine_home_system_version), subtitle = systemVersion)
+                    HomeComponentPackages.forEach { (label, _) ->
+                        MochiListRow(stringResource(label), subtitle = componentVersions[label] ?: "—")
+                    }
+                }
+            }
 
+            item(key = "support_seine") { SeineSupportCard(onOpenSponsor) }
+            item(key = "version_update") {
+                UpdateInfoCard(
+                    currentVersion = SeineProject.CURRENT_RELEASE.removePrefix("v"),
+                    latestVersion = latestRelease?.tag,
+                    checking = isCheckingUpdate,
+                    onOpenReleases = {
+                        context.startActivity(Intent(Intent.ACTION_VIEW, SeineProject.RELEASES.toUri()))
+                    },
+                )
+            }
+        }
     }
 }
 
@@ -708,30 +568,11 @@ private suspend fun forceKillSystemUI(context: Context) {
 }
 
 @Composable
-private fun RevealItem(
-    visible: Boolean,
-    delayMillis: Int,
-    content: @Composable () -> Unit,
-) {
-    ArtVisibilityMotion(
-        visible = visible,
-        delayMillis = delayMillis,
-        enterAlphaDurationMillis = 320,
-        enterTransformDurationMillis = 420,
-        exitAlphaDurationMillis = 120,
-        exitTransformDurationMillis = 120,
-        hiddenEnterScale = 1f,
-        hiddenExitScale = 1f,
-        slideDivisor = 8,
-    ) {
-        content()
-    }
-}
-
-@Composable
 private fun WorkingStatusCard(
+    modifier: Modifier,
+    compact: Boolean,
     statusTitle: String,
-    statusVersion: String,
+    frameworkVersion: String?,
     activated: Boolean,
     easterEggType: EasterEggType,
     useMonetColors: Boolean,
@@ -743,111 +584,132 @@ private fun WorkingStatusCard(
             containerStrength = 0.24f,
         )
 
-        !activated -> customStatusCardPalette(
-            container = Color(0xFFF8E2E2),
-            icon = Color(0xFFE06767),
-            title = Color(0xFF7A2A2A),
-            summary = Color(0xFF9A4D4D),
-        )
+        !activated -> MochiTheme.colorScheme.run {
+            StatusCardPalette(errorContainer, onErrorContainer, onErrorContainer)
+        }
 
         easterEggType == EasterEggType.NEW_YEAR -> customStatusCardPalette(
             container = Color(0xFFFFECEC),
             icon = Color(0xFFE64B4B),
             title = Color(0xFF7F1E1E),
-            summary = Color(0xFF9A3939),
         )
 
         easterEggType == EasterEggType.APRIL_FOOLS -> customStatusCardPalette(
             container = Color(0xFFFFF6D8),
             icon = Color(0xFFEBB027),
             title = Color(0xFF7A5100),
-            summary = Color(0xFF8E6900),
         )
 
         easterEggType == EasterEggType.EASTER -> customStatusCardPalette(
             container = Color(0xFFFFF4E6),
             icon = Color(0xFFED9A9A),
             title = Color(0xFF6A4C93),
-            summary = Color(0xFF4CA66B),
         )
 
         easterEggType == EasterEggType.MI_FANS -> customStatusCardPalette(
             container = Color(0xFFFFF2E0),
             icon = Color(0xFFFF6900),
             title = Color(0xFFB34700),
-            summary = Color(0xFF8C6239),
         )
 
         easterEggType == EasterEggType.HUAWEI_ULTIMATE_DESIGN -> customStatusCardPalette(
             container = Color(0xFF5C2325),
             icon = Color(0xFFE3B86A),
             title = Color(0xFFF8E2B3),
-            summary = Color(0xFFD7B08F),
         )
 
-        useMonetColors -> rememberStatusCardPalette(
-            accent = MiuixTheme.colorScheme.primary,
-            containerStrength = 0.22f,
+        MochiTheme.colorScheme.isDark -> StatusCardPalette(
+            container = Color(0xFF183724),
+            icon = Color(0xFF72CD7D),
+            title = Color(0xFFECFFF0),
         )
 
-        else -> customStatusCardPalette(
-            container = Color(0xFFDFFAE4),
-            icon = Color(0xFF36D167),
-            title = Color(0xFF1E5A31),
-            summary = Color(0xFF2C7D45),
+        else -> StatusCardPalette(
+            container = Color(0xFFE1F7E4),
+            icon = Color(0xFF6BC874),
+            title = Color(0xFF101610),
         )
     }
 
     val statusIcon = when {
-        !activated -> Icons.Outlined.Warning
-
-        easterEggType == EasterEggType.APRIL_FOOLS -> Icons.Outlined.BugReport
-        easterEggType == EasterEggType.EASTER -> Icons.Outlined.CrueltyFree
-        easterEggType == EasterEggType.MI_FANS -> Icons.Outlined.Lock
-
-        else -> Icons.Outlined.CheckCircle
+        !activated -> "alert-circle"
+        easterEggType == EasterEggType.APRIL_FOOLS -> "bug"
+        easterEggType == EasterEggType.EASTER -> "egg"
+        easterEggType == EasterEggType.MI_FANS -> "lock-closed"
+        else -> "checkmark-circle"
     }
-
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(190.dp)
-            .featureGuideAnchor("home_status"),
-        colors = CardDefaults.defaultColors(color = palette.container),
-        insideMargin = PaddingValues(14.dp),
-        pressFeedbackType = PressFeedbackType.Tilt,
-        showIndication = false,
-        onLongPress = {
-            onLongPress()
-        }
+    Box(
+        modifier = modifier
+            .heightIn(min = if (compact) 144.dp else 124.dp)
+            .featureGuideAnchor("home_status")
+            .clip(MochiRoundedRectangle(16.dp))
+            .background(palette.container)
+            .semantics {
+                onLongClick {
+                    onLongPress()
+                    true
+                }
+            }
+            .pointerInput(onLongPress) {
+                detectTapGestures(onLongPress = { onLongPress() })
+            },
     ) {
-        Box(modifier = Modifier.fillMaxSize()) {
-            Icon(
-                imageVector = statusIcon,
-                contentDescription = null,
-                tint = palette.icon,
-                modifier = Modifier
-                    .size(198.dp)
-                    .align(Alignment.BottomEnd)
-                    .offset(x = 72.dp, y = 56.dp),
-            )
-            Column(modifier = Modifier.fillMaxWidth()) {
+        val markModifier = Modifier
+            .align(Alignment.BottomEnd)
+            .offset(x = 13.dp, y = 14.dp)
+            .size(76.dp)
+        if (statusIcon == "checkmark-circle") {
+            StatusCheckMark(markModifier, palette.icon)
+        } else {
+            MochiIonicon(statusIcon, modifier = markModifier, size = 76.dp, tint = palette.icon)
+        }
+        Column(
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .fillMaxWidth()
+                .padding(start = 15.dp, end = 15.dp, top = 14.dp, bottom = 14.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Text(statusTitle, color = palette.title, style = MochiTheme.textStyles.titleLarge)
+            if (!frameworkVersion.isNullOrBlank()) {
                 Text(
-                    text = statusTitle,
-                    fontSize = 21.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = palette.title,
-                )
-                Spacer(modifier = Modifier.height(2.dp))
-                Text(
-                    text = androidx.compose.ui.res.stringResource(
-                        R.string.home_working_version,
-                        statusVersion
-                    ),
-                    style = MiuixTheme.textStyles.body2,
-                    color = palette.summary,
+                    frameworkVersion.replace("API ", "API\u00A0"),
+                    color = palette.title.copy(alpha = 0.76f),
+                    style = MochiTheme.textStyles.footnote,
                 )
             }
+        }
+    }
+}
+
+@Composable
+private fun StatusCheckMark(modifier: Modifier, tint: Color) {
+    Spacer(
+        modifier.drawWithCache {
+            val w = size.minDimension
+            val stroke = w * .10f
+            val tick = Path().apply {
+                moveTo(w * .27f, w * .53f)
+                lineTo(w * .41f, w * .67f)
+                lineTo(w * .73f, w * .35f)
+            }
+            onDrawBehind {
+                drawCircle(tint, radius = (w - stroke) / 2f, style = Stroke(stroke))
+                drawPath(tick, tint, style = Stroke(stroke, cap = StrokeCap.Round, join = StrokeJoin.Round))
+            }
+        },
+    )
+}
+
+@Composable
+private fun HomeCountTile(count: Int?, label: String) {
+    ConfigCard(Modifier.fillMaxWidth()) {
+        Column(
+            Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Text(label, color = MochiTheme.colorScheme.onSurfaceVariant, style = MochiTheme.textStyles.bodySmall)
+            Text(count?.toString() ?: "—", style = MochiTheme.textStyles.titleLarge)
         }
     }
 }
@@ -864,280 +726,59 @@ private fun EasterEggType.toTitleRes(): Int {
 }
 
 @Composable
-private fun RootWarningCard(useMonetColors: Boolean) {
-    val palette = if (useMonetColors) rememberStatusCardPalette(
-        accent = MiuixTheme.colorScheme.error,
-        containerStrength = 0.2f,
-        iconStrength = 0.82f,
-        titleStrength = 0.42f,
-        summaryStrength = 0.26f,
-    ) else customStatusCardPalette(
-        container = Color(0xFFFDE9E9),
-        icon = Color(0xFFD94B4B),
-        title = Color(0xFF8C1F1F),
-        summary = Color(0xFFA63737),
-    )
-
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(108.dp),
-        colors = CardDefaults.defaultColors(color = palette.container),
-        insideMargin = PaddingValues(14.dp),
-        pressFeedbackType = PressFeedbackType.Tilt,
-        showIndication = false
-    ) {
-        Box(modifier = Modifier.fillMaxSize()) {
-            Icon(
-                imageVector = Icons.Outlined.DoNotDisturb,
-                contentDescription = null,
-                tint = palette.icon,
-                modifier = Modifier
-                    .size(108.dp)
-                    .align(Alignment.BottomEnd)
-                    .offset(x = 50.dp, y = 42.dp),
-            )
-
-            Column(modifier = Modifier.fillMaxWidth()) {
-                Text(
-                    text = androidx.compose.ui.res.stringResource(R.string.home_root_warning_title),
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = palette.title,
-                )
-                Spacer(modifier = Modifier.height(2.dp))
-                Text(
-                    text = androidx.compose.ui.res.stringResource(R.string.home_root_warning_desc),
-                    style = MiuixTheme.textStyles.body2,
-                    color = palette.summary,
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun FrameNoticeCard(title: String, summary: String, useMonetColors: Boolean) {
-    val colorScheme = MiuixTheme.colorScheme
-    val palette = if (useMonetColors) rememberStatusCardPalette(
-        accent = lerp(colorScheme.primary, colorScheme.secondary, 0.35f),
-        containerStrength = 0.2f,
-        iconStrength = 0.8f,
-        titleStrength = 0.4f,
-        summaryStrength = 0.24f,
-    ) else customStatusCardPalette(
-        container = Color(0xFFFFF3CD),
-        icon = Color(0xFFE0A100),
-        title = Color(0xFF7A5A00),
-        summary = Color(0xFF8A6B00),
-    )
-
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(108.dp),
-        colors = CardDefaults.defaultColors(color = palette.container),
-        insideMargin = PaddingValues(14.dp),
-        onClick = {},
-        pressFeedbackType = PressFeedbackType.Tilt,
-        showIndication = false
-    ) {
-        Box(modifier = Modifier.fillMaxSize()) {
-            Icon(
-                imageVector = MaterialSymbols.Rounded.Frame_bug,
-                contentDescription = null,
-                tint = palette.icon,
-                modifier = Modifier
-                    .size(108.dp)
-                    .align(Alignment.BottomEnd)
-                    .offset(x = 50.dp, y = 44.dp),
-            )
-
-            Column(modifier = Modifier.fillMaxWidth()) {
-                Text(
-                    text = title,
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = palette.title,
-                )
-                Spacer(modifier = Modifier.height(2.dp))
-                Text(
-                    text = summary,
-                    style = MiuixTheme.textStyles.body2,
-                    color = palette.summary,
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun UpdateWarningCard(currentHash: String, latestHash: String, useMonetColors: Boolean) {
-    val context = LocalContext.current
-    val colorScheme = MiuixTheme.colorScheme
-    val palette = if (useMonetColors) rememberStatusCardPalette(
-        accent = lerp(colorScheme.primary, colorScheme.secondary, 0.35f),
-        containerStrength = 0.2f,
-        iconStrength = 0.8f,
-        titleStrength = 0.4f,
-        summaryStrength = 0.24f,
-    ) else customStatusCardPalette(
-        container = Color(0xFFFFF3CD),
-        icon = Color(0xFFE0A100),
-        title = Color(0xFF7A5A00),
-        summary = Color(0xFF8A6B00),
-    )
-
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(108.dp),
-        colors = CardDefaults.defaultColors(color = palette.container),
-        insideMargin = PaddingValues(14.dp),
-        onClick = {
-            @Suppress("KotlinConstantConditions", "SimplifyBooleanWithConstants")
-            context.startActivity(
-                Intent(
-                    Intent.ACTION_VIEW,
-                    (if (AppProperties.BUILD_CHANNEL == "canary") "https://updates.uwu.hk" else "https://github.com/killerprojecte/REAREye/releases")
-                        .toUri()
-                )
-            )
-        },
-        pressFeedbackType = PressFeedbackType.Tilt,
-        showIndication = false
-    ) {
-        Box(modifier = Modifier.fillMaxSize()) {
-            Icon(
-                imageVector = Icons.Outlined.Sync,
-                contentDescription = null,
-                tint = palette.icon,
-                modifier = Modifier
-                    .size(108.dp)
-                    .align(Alignment.BottomEnd)
-                    .offset(x = 50.dp, y = 44.dp),
-            )
-
-            Column(modifier = Modifier.fillMaxWidth()) {
-                Text(
-                    text = androidx.compose.ui.res.stringResource(R.string.home_update_warning_title),
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = palette.title,
-                )
-                Spacer(modifier = Modifier.height(2.dp))
-                Text(
-                    text = androidx.compose.ui.res.stringResource(
-                        R.string.home_update_warning_desc,
-                        currentHash,
-                        latestHash,
-                    ),
-                    style = MiuixTheme.textStyles.body2,
-                    color = palette.summary,
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun ModuleInfoCard(
-    activationState: ModuleActivationState,
-    moduleVersion: String,
-    versionCodename: String,
-    releaseChannel: String,
-    easterEggType: EasterEggType
+private fun HomeNotice(
+    title: String,
+    summary: String,
+    icon: String,
+    isError: Boolean = false,
+    onClick: (() -> Unit)? = null,
 ) {
-    val activated = activationState == ModuleActivationState.ACTIVE
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        insideMargin = PaddingValues(16.dp),
-    ) {
-        InfoLine(
-            title = androidx.compose.ui.res.stringResource(R.string.status_card),
-            value = when {
-                activationState == ModuleActivationState.SERVICE_UNAVAILABLE ->
-                    androidx.compose.ui.res.stringResource(R.string.home_status_service_unavailable)
-
-                activationState == ModuleActivationState.SCOPE_NOT_AUTHORIZED ->
-                    androidx.compose.ui.res.stringResource(R.string.home_status_scope_not_authorized)
-
-                activationState == ModuleActivationState.NO_RUNNING_TARGET ->
-                    androidx.compose.ui.res.stringResource(R.string.home_status_no_running_target)
-
-                easterEggType == EasterEggType.APRIL_FOOLS -> androidx.compose.ui.res.stringResource(
-                    R.string.home_easter_egg_april_fools_activated
-                )
-
-                easterEggType == EasterEggType.EASTER -> androidx.compose.ui.res.stringResource(
-                    R.string.home_easter_egg_easter_activated
-                )
-
-                easterEggType == EasterEggType.MI_FANS -> androidx.compose.ui.res.stringResource(
-                    R.string.home_easter_egg_mifans_activated
-                )
-
-                easterEggType == EasterEggType.HUAWEI_ULTIMATE_DESIGN -> androidx.compose.ui.res.stringResource(
-                    R.string.home_easter_egg_huawei_ultimate_design_activated
-                )
-
-                else -> androidx.compose.ui.res.stringResource(R.string.module_is_activated)
-            },
+    val colors = MochiTheme.colorScheme
+    val noticeColors = if (isError) {
+        MochiListDefaults.colors(
+            container = colors.errorContainer,
+            content = colors.onErrorContainer,
+            secondary = colors.onErrorContainer,
+            accent = colors.onErrorContainer,
         )
-        Spacer(modifier = Modifier.height(12.dp))
-        InfoLine(
-            title = androidx.compose.ui.res.stringResource(R.string.module_version_label),
-            value = moduleVersion,
+    } else {
+        MochiListDefaults.colors(
+            container = colors.tertiaryContainer,
+            content = colors.onTertiaryContainer,
+            secondary = colors.onTertiaryContainer,
+            accent = colors.onTertiaryContainer,
         )
-        Spacer(modifier = Modifier.height(12.dp))
-        InfoLine(
-            title = androidx.compose.ui.res.stringResource(R.string.version_codename_label),
-            value = versionCodename,
-        )
-        Spacer(modifier = Modifier.height(12.dp))
-        InfoLine(
-            title = androidx.compose.ui.res.stringResource(R.string.home_status_channel),
-            value = releaseChannel,
+    }
+    MochiListCard(colors = noticeColors) {
+        MochiListRow(
+            title = title,
+            subtitle = summary,
+            leading = { MochiIonicon(icon) },
+            onClick = onClick,
+            chevron = onClick != null,
+            colors = noticeColors,
         )
     }
 }
 
 @Composable
-private fun UpdateInfoCard(currentHash: String, latestHash: String?, checking: Boolean) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        insideMargin = PaddingValues(16.dp),
-    ) {
-        Text(
-            text = androidx.compose.ui.res.stringResource(R.string.home_update_title),
-            style = MiuixTheme.textStyles.title3,
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        InfoLine(
-            title = androidx.compose.ui.res.stringResource(R.string.home_update_current),
-            value = currentHash,
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        InfoLine(
-            title = androidx.compose.ui.res.stringResource(R.string.home_update_latest),
-            value = when {
-                checking -> androidx.compose.ui.res.stringResource(R.string.home_update_checking)
-                latestHash.isNullOrBlank() -> androidx.compose.ui.res.stringResource(R.string.home_update_unknown)
-                else -> latestHash
+private fun UpdateInfoCard(
+    currentVersion: String,
+    latestVersion: String?,
+    checking: Boolean,
+    onOpenReleases: () -> Unit,
+) {
+    MochiListSection(header = stringResource(R.string.home_update_title)) {
+        MochiListRow(stringResource(R.string.home_update_current), subtitle = currentVersion)
+        MochiListRow(
+            stringResource(R.string.home_update_latest),
+            subtitle = when {
+                checking -> stringResource(R.string.home_update_checking)
+                latestVersion == null -> stringResource(R.string.home_update_unknown)
+                else -> latestVersion
             },
-        )
-    }
-}
-
-@Composable
-fun InfoLine(title: String, value: String, modifier: Modifier = Modifier) {
-    Column(modifier = modifier) {
-        Text(text = title, style = MiuixTheme.textStyles.headline1)
-        Spacer(modifier = Modifier.height(2.dp))
-        Text(
-            text = value,
-            style = MiuixTheme.textStyles.body2,
-            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+            onClick = onOpenReleases,
+            chevron = true,
         )
     }
 }

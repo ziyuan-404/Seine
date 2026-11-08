@@ -2,21 +2,21 @@
   <img src="https://reareye-gh.uwu.hk/favicon-32.png" alt="REAREye logo" width="160" />
 </p>
 
-<h1 align="center">REAREye</h1>
+<h1 align="center">𝒮ℯ𝒾𝓃ℯ</h1>
 
 <p align="center">
-  适用于小米 17 Pro / 17 Pro Max 的背屏增强模块。<br>
+  适用于小米 17 Pro / 17 Pro Max 的背屏增强模块，基于 <a href="https://github.com/killerprojecte/REAREye">REAREye</a> 的分支。<br>
   基于 LSPosed / Xposed，为系统框架、背屏中心、主题管理和系统界面提供更细粒度的可配置能力。
 </p>
 
 <p align="center">
-  <a href="./README_EN.md">English</a> · <a href="https://github.com/ziyuan-404/REAREye">项目主页</a>
+  <a href="./README_EN.md">English</a> · <a href="https://github.com/ziyuan-404/Seine">项目主页</a>
 </p>
 
 <p align="center">
-  <a href="https://github.com/ziyuan-404/REAREye/releases"><img src="https://img.shields.io/github/v/release/ziyuan-404/REAREye?display_name=tag" alt="GitHub release"></a>
-  <a href="https://github.com/ziyuan-404/REAREye/blob/develop/2.0/LICENSE"><img src="https://img.shields.io/github/license/ziyuan-404/REAREye" alt="GitHub license"></a>
-  <a href="https://github.com/ziyuan-404/REAREye/issues"><img src="https://img.shields.io/github/issues/ziyuan-404/REAREye" alt="GitHub issues"></a>
+  <a href="https://github.com/ziyuan-404/Seine/releases"><img src="https://img.shields.io/github/v/release/ziyuan-404/Seine?display_name=tag" alt="GitHub release"></a>
+  <a href="https://github.com/ziyuan-404/Seine/blob/main/LICENSE"><img src="https://img.shields.io/github/license/ziyuan-404/Seine" alt="GitHub license"></a>
+  <a href="https://github.com/ziyuan-404/Seine/issues"><img src="https://img.shields.io/github/issues/ziyuan-404/Seine" alt="GitHub issues"></a>
   <a href="https://developer.android.com/"><img src="https://img.shields.io/badge/Android-16%2B-3DDC84?logo=android&logoColor=white" alt="Android"></a>
   <a href="https://github.com/LSPosed/LSPosed"><img src="https://img.shields.io/badge/Framework-LSPosed%20%2F%20Xposed-5C6BC0" alt="Framework"></a>
 </p>
@@ -34,44 +34,80 @@
 - 移除国行 GMS 功能限制。
 - 提供切换主屏 / 背屏的快捷设置 Tile，以及常用目标应用的快捷终止入口。
 
-## 二改内容（ziyuan-404）
+## 分支特色
 
-二改维护分支为 [`develop/2.0`](https://github.com/ziyuan-404/REAREye/tree/develop/2.0)，集成上游 `dev` 的相关更新，并加入背屏应用、通知和输入体验改进。主要内容如下：
+分支基于 [REAREye](https://github.com/killerprojecte/REAREye) 继续开发。
 
-- **背屏应用管理**：增加独立的背屏应用目录和应用列表管理，可显示原生应用图标、按选择顺序 / 应用名 / 包名排序，并支持原生应用栏或蜂窝排列；两种界面的第三方应用图标统一使用圆形裁切，蜂窝布局保留原厂半透明模糊外圈。
-- **应用显示调节**：支持为背屏应用单独设置等效 DPI、显示区域、圆角和摄像头避让区域；显示区域可以拖动、缩放，也可以扩展到完整背屏范围。
-- **键盘与交互**：背屏应用输入框可调用当前输入法；增加背屏返回手势、上拉应用栏手势、自由窗口显示和源动画适配。
-- **应用安全**：支持从背屏应用列表或通知启动前进行原厂人脸验证；未录入、验证失败或取消时不会打开应用。
-- **微信 / QQ 适配**：增加微信和 QQ 的背屏专用作用域，改善应用启动、输入和通知相关行为；同时接入百度输入法作用域，便于在背屏完成文字输入和回复。
-- **通知二改**：支持选择性同步通知、双向划除、主屏通知分组折叠、整组清除、点按后翻转到主屏，以及背屏通知柔光玻璃背景；保留系统通话、闹钟、倒计时和音乐卡片的原生优先级。
-- **通知卡片与充电**：按正屏通知列表和背屏实际翻页方向适配反向顺序，过滤系统“更多通知”虚拟聚合入口，避免出现空白“系统界面”卡片；增加绿色液体充电动画、亮屏持续充电显示和背屏亮屏时长控制。
-- **录音机通知**：背屏录音卡片复用原厂计时、波形动画和纯图标的暂停 / 继续、结束按钮；录音回放的正屏通知也使用原厂焦点卡片样式，正背屏共用录音机原生播放控制。需在 LSPosed 作用域中勾选系统录音机 `com.android.soundrecorder`，并重新启动录音机。
-- **系统兼容性**：限制模块只在系统服务或首个包加载，减少重复初始化；摄像头相关包保留独立的背屏几何处理，避免通用显示区域设置覆盖相机适配；补充背屏密度、任务配置、双击息屏和签名权限白名单处理。
+**应用场景**在手机倒扣时能够获取通知，读取消息 以及快捷回复。
+- **背屏通知卡片**在背屏通知卡片区域，同步主屏通知，增强通知安全与通知动画，并提供按钮进行背屏的快捷操作。 
+- **背屏应用管理**增加应用卡片，支持原生应用栏与新的蜂窝排列，让更多的应用能够在背屏运行。
+- **微信 / QQ 适配**增加背屏专用作用域，改善应用启动、输入和通知行为，同时接入百度输入法作用域。
+- **键盘与交互**支持背屏输入框调用当前输入法，并且在输入时，输入框会避让键盘区域，适配返回手势、上滑返回桌面及应用启动来源动画。
+- **界面动画**参考了 **STRAY洋葱** 的动画设计，已获得授权。 
+- **模块界面**采用 Mochi Compose 重构，提供 Mochi主题、预测性返回、液态菜单和底栏，设置按功能分组。[Mochi Compose](https://github.com/feice11/mochi-compose)
+- **应用显示调节**集中管理等效 DPI、显示区域、圆角、亮屏时长与逐应用兼容设置，支持拖动边界和滑条调节，并预览显示区域与圆角。
+- **应用安全**支持在背屏打开应用前进行人脸验证。
+- **通知卡片与充电**适配背屏翻页方向和通知排列，过滤系统「更多通知」，加入充电效果及亮屏显示设置。
+- **录音与计时卡片**适配背屏录音、秒表与倒计时场景。采用hyperOS4设计语言。
+- **备份与恢复**支持 JSON 文件和剪贴板导入导出。
+- **兼容性与性能**减少重复初始化，异步加载应用目录，统一复用配置组件，并按 Mochi 画质档位控制渲染开销。
 
-二改功能默认不会自动替所有应用开启。安装后请在模块配置中选择需要放到背屏的应用，再按需开启 DPI、键盘、人脸验证、手势、显示区域和通知同步选项。部分设置修改后需要重启背屏中心或对应系统进程。
+## 效果展示
+
+以下为本分支的实机展示，点击图片可查看原图。
+
+<table>
+  <tr>
+    <td width="50%" align="center">
+      <p><strong>背屏应用列表</strong></p>
+      <a href="./docs/images/rear-app-list.png"><img src="./docs/images/rear-app-list.png" width="460" alt="背屏应用列表"></a>
+      <p>在背屏浏览并打开允许的应用。</p>
+    </td>
+    <td width="50%" align="center">
+      <p><strong>背屏运行应用</strong></p>
+      <a href="./docs/images/rear-app-xiaohongshu.png"><img src="./docs/images/rear-app-xiaohongshu.png" width="460" alt="背屏运行应用"></a>
+      <p>小红书背屏运行展示。</p>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" align="center">
+      <p><strong>背屏通知卡片</strong></p>
+      <a href="./docs/images/rear-notification.png"><img src="./docs/images/rear-notification.png" width="460" alt="背屏通知卡片"></a>
+      <p>展示应用图标、通知内容与分组入口。</p>
+    </td>
+    <td width="50%" align="center">
+      <p><strong>分组通知</strong></p>
+      <a href="./docs/images/rear-grouped-notification.png"><img src="./docs/images/rear-grouped-notification.png" width="460" alt="分组通知"></a>
+      <p>同一应用的多条通知集中展示。</p>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" align="center">
+      <p><strong>通知详情入口</strong></p>
+      <a href="./docs/images/rear-private-notification.png"><img src="./docs/images/rear-private-notification.png" width="460" alt="通知详情入口"></a>
+      <p>通知概览与点按查看详情入口。</p>
+    </td>
+    <td width="50%" align="center">
+      <p><strong>下载进度卡片</strong></p>
+      <a href="./docs/images/rear-download.png"><img src="./docs/images/rear-download.png" width="460" alt="下载进度卡片"></a>
+      <p>背屏展示下载进度与通知操作。</p>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" align="center">
+      <p><strong>录音卡片</strong></p>
+      <a href="./docs/images/rear-recorder.png"><img src="./docs/images/rear-recorder.png" width="460" alt="录音卡片"></a>
+      <p>原生计时与录音控制。</p>
+    </td>
+    <td width="50%" align="center">
+      <p><strong>秒表卡片</strong></p>
+      <a href="./docs/images/rear-stopwatch.png"><img src="./docs/images/rear-stopwatch.png" width="460" alt="秒表卡片"></a>
+      <p>背屏计时与快捷控制。</p>
+    </td>
+  </tr>
+</table>
 
 ## 主要功能
-
-### 模块设置
-
-- 主题样式
-  - 支持 Miuix / Monet 两套风格。
-  - 支持跟随系统、浅色、深色模式。
-- 导航栏样式
-  - 支持普通、悬浮、悬浮液态玻璃样式。
-- 搜索栏样式
-  - 支持默认样式和 Miuix 样式。
-- 仓库 API
-  - 支持阿里云、Cloudflare 和自定义 API 域名。
-  - 自定义域名只需要填写主机名，不需要 `https://` 或路径。
-- WebView 硬件加速
-  - 默认开启；如果 Markdown 预览在设备上崩溃，可关闭切换到软件渲染。
-- 收藏配置
-  - 长按配置节点可加入收藏，便于快速访问常用选项。
-- 隐藏桌面入口
-  - 可选隐藏 REAREye 的 Launcher 图标。
-- 更多调试输出
-  - 便于排查模块行为与兼容性问题。
 
 ### 系统框架增强
 
@@ -194,10 +230,10 @@
   - 切换当前应用到背屏。
   - 将先前移至背屏的应用切回主屏。
 - 首页状态与快捷操作
-  - 查看模块工作状态、版本信息、构建渠道、更新状态和 Root 状态。
+  - 查看激活状态、LSPosed 版本、背屏应用与通知应用数量、系统组件版本和更新状态。
   - 提供针对背屏中心、主题管理、系统界面的快捷终止入口。
 - 关于页
-  - 查看项目链接、文档、QQ 群、酷安主页、鸣谢人员和赞助入口。
+  - 查看设备信息、项目链接、文档、鸣谢人员、赞助入口和引用说明。
 
 ## 模块作用域
 
@@ -207,20 +243,26 @@
 - `com.xiaomi.subscreencenter`
 - `com.android.thememanager`
 - `com.android.systemui`
+- `com.miui.personalassistant`
+- `com.miui.weather2`
+- `com.miui.gallery`
+- `com.miui.voiceassist`
+- `com.baidu.input_mi`
+- `com.android.soundrecorder`
 
 ## 前置要求
 
 - Android 16 / API 36 及以上。
 - LSPosed / Xposed 兼容环境。
-- Xposed 最低版本 93。
+- 支持 libxposed API 102 的兼容框架。
 - 适用于带背屏的目标机型，当前仓库主要面向小米 17 Pro / 17 Pro Max。
 - 部分功能或快捷操作需要 Root 权限，例如快捷终止目标应用、主屏 / 背屏应用切换等。
 - 背屏组件仓库、更新检查、鸣谢人员列表等网络功能需要互联网访问。
 
 ## 安装方式
 
-1. 从 [Releases](https://github.com/ziyuan-404/REAREye/releases) 下载最新 APK 并安装。
-2. 在 LSPosed 或兼容框架中启用 `REAREye`。
+1. 从 [Releases](https://github.com/ziyuan-404/Seine/releases) 下载最新 APK 并安装。
+2. 在 LSPosed 或兼容框架中启用 `Seine`。
 3. 确认模块作用域包含：`android`、`com.xiaomi.subscreencenter`、`com.android.thememanager`、
    `com.android.systemui`。
 4. 重启设备，或至少重启相关目标应用后再进入模块配置。
@@ -235,7 +277,7 @@
 - 主题管理相关修改建议在变更后重启 `com.android.thememanager`，必要时重启系统。
 - 部分快捷操作或系统级能力依赖 Root 权限，请确保 Root 管理器已正确授权。
 - 仓库管理的组件、卡片和通知路由会保留来源信息；手动管理时请先确认是否需要卸载或覆盖仓库组件。
-- 本模块不内置背屏应用启动器；如果你需要直接在背屏拉起某些应用，可以配合 ADB 或其他启动方式使用。
+- 在「配置 → 更多 → 妙享背屏增强」中管理允许打开的应用，再从背屏应用列表启动。
 - 解锁模板数量上限后，极端大数量模板场景仍建议自行测试稳定性。
 - 如果仓库详情中的 Markdown 预览导致崩溃，可在模块设置中关闭 WebView 硬件加速。
 
@@ -254,7 +296,7 @@
 
 项目使用 Kotlin、Jetpack Compose、Android Gradle Plugin 和 Gradle Wrapper。
 
-- JDK 17。
+- JDK 21。
 - Android SDK / Build Tools 37。
 - 编译 SDK 37，最低 SDK 36，目标 SDK 37。
 - 如需签名 Release 包，请在 `local.properties`、Gradle 属性或环境变量中配置：
@@ -274,9 +316,9 @@
 
 ## 获取帮助
 
-- 提交问题反馈: [Issues](https://github.com/ziyuan-404/REAREye/issues)
-- 查看版本发布: [Releases](https://github.com/ziyuan-404/REAREye/releases)
-- 项目仓库地址: [ziyuan-404/REAREye](https://github.com/ziyuan-404/REAREye)
+- 提交问题反馈: [Issues](https://github.com/ziyuan-404/Seine/issues)
+- 查看版本发布: [Releases](https://github.com/ziyuan-404/Seine/releases)
+- 项目仓库地址: [ziyuan-404/Seine](https://github.com/ziyuan-404/Seine)
 
 ## 免责声明
 

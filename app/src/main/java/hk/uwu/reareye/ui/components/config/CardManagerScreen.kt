@@ -51,6 +51,7 @@ import androidx.compose.ui.unit.sp
 import com.composables.icons.materialsymbols.MaterialSymbols
 import com.composables.icons.materialsymbols.rounded.Deployed_code
 import com.composables.icons.materialsymbols.rounded.Storefront
+import hk.uwu.reareye.BuildConfig
 import hk.uwu.reareye.R
 import hk.uwu.reareye.repository.rearwidget.RearAppCardRepository
 import hk.uwu.reareye.repository.rearwidget.RearBusinessConfig
@@ -89,14 +90,14 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
-import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.InfiniteProgressIndicator
 import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.Switch
-import top.yukonga.miuix.kmp.basic.TabRowWithContour
+import androidx.compose.ui.draw.clip
+import kotlinx.collections.immutable.persistentListOf
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextField
 import top.yukonga.miuix.kmp.basic.TopAppBar
@@ -227,7 +228,7 @@ fun CardManagerScreen(
     var draftCardId by remember { mutableStateOf(RearWidgetConfigCodec.newCardId()) }
     val activeTemplateCardId = remember { mutableStateOf<String?>(null) }
     var draftTitle by remember { mutableStateOf("") }
-    var draftPackageName by remember { mutableStateOf("hk.uwu.reareye") }
+    var draftPackageName by remember { mutableStateOf(BuildConfig.APPLICATION_ID) }
     var draftBusiness by remember { mutableStateOf("") }
     var draftPriorityText by remember { mutableStateOf("500") }
     var draftAutomaticPriority by remember { mutableStateOf(true) }
@@ -297,7 +298,7 @@ fun CardManagerScreen(
         addModeTab = mode.coerceIn(0, 1)
         draftCardId = RearWidgetConfigCodec.newCardId()
         draftTitle = ""
-        draftPackageName = "hk.uwu.reareye"
+        draftPackageName = BuildConfig.APPLICATION_ID
         draftBusiness = ""
         draftPriorityText = "600"
         draftAutomaticPriority = true
@@ -557,6 +558,7 @@ fun CardManagerScreen(
         },
     ) {
         Scaffold(
+            containerColor = if (embedded) Color.Transparent else MiuixTheme.colorScheme.background,
             topBar = {
                 if (!embedded) TopAppBar(
                     modifier = Modifier.rearAcrylicEffect(hazeState, hazeStyle),
@@ -622,25 +624,22 @@ fun CardManagerScreen(
                     .rearAcrylicSource(hazeState)
                     .padding(top = pageTopPadding),
             ) {
-                TabRowWithContour(
-                    tabs = listOf(
+                ConfigSegmentedControl(
+                    items = persistentListOf(
                         stringResource(R.string.rear_widget_card_tab_normal),
                         stringResource(R.string.rear_widget_card_tab_app),
                     ),
-                    selectedTabIndex = selectedCardTab,
-                    onTabSelected = { page ->
+                    selectedIndex = selectedCardTab,
+                    onSelect = { page ->
                         scope.launch { cardPagerState.animateScrollToPage(page) }
                     },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(start = 12.dp, end = 12.dp, bottom = 8.dp),
                 )
                 HorizontalPager(
                     state = cardPagerState,
-                    beyondViewportPageCount = 1,
                     modifier = Modifier
                         .fillMaxSize()
-                        .graphicsLayer { clip = true },
+                        .padding(horizontal = ConfigUi.HorizontalInset)
+                        .clip(ConfigUi.CardShape),
                 ) { activeTab ->
                     if (demo != null && activeTab != 0) return@HorizontalPager
                     if (activeTab == 0) {
@@ -650,8 +649,7 @@ fun CardManagerScreen(
                                 .fillMaxSize()
                                 .scrollEndHaptic()
                                 .overScrollVertical()
-                                .rearAcrylicSource(hazeState)
-                                .padding(horizontal = 12.dp),
+                                .rearAcrylicSource(hazeState),
                             contentPadding = PaddingValues(
                                 bottom = pageBottomPadding,
                                 start = pageStartPadding,
@@ -661,7 +659,7 @@ fun CardManagerScreen(
                             overscrollEffect = null,
                         ) {
                             if (!embedded) item {
-                                Card(
+                                ConfigCard(
                                     modifier = Modifier
                                         .padding(bottom = 12.dp)
                                         .fillMaxWidth()
@@ -713,7 +711,7 @@ fun CardManagerScreen(
 
                             if (!dataCardsVisible) {
                                 item {
-                                    Card(
+                                    ConfigCard(
                                         modifier = Modifier.fillMaxWidth(),
                                         insideMargin = PaddingValues(vertical = 24.dp),
                                     ) {
@@ -768,7 +766,7 @@ fun CardManagerScreen(
                                                     if (isDragging) {
                                                         Modifier.shadow(
                                                             elevation = 12.dp,
-                                                            shape = RoundedCornerShape(20.dp),
+                                                            shape = ConfigUi.CardShape,
                                                             clip = false,
                                                         )
                                                     } else Modifier
@@ -918,7 +916,7 @@ fun CardManagerScreen(
                             item {
                                 if (dataCardsVisible && cards.isEmpty()) {
                                     ArtRevealItem(visible = true, delayMillis = 40) {
-                                        Card(modifier = Modifier.fillMaxWidth()) {
+                                        ConfigCard(modifier = Modifier.fillMaxWidth()) {
                                             Text(
                                                 text = stringResource(R.string.rear_widget_empty_card),
                                                 modifier = Modifier.padding(16.dp),
@@ -935,8 +933,7 @@ fun CardManagerScreen(
                             modifier = Modifier
                                 .fillMaxSize()
                                 .scrollEndHaptic()
-                                .overScrollVertical()
-                                .padding(horizontal = 12.dp),
+                                .overScrollVertical(),
                             contentPadding = PaddingValues(
                                 bottom = pageBottomPadding,
                                 start = pageStartPadding,

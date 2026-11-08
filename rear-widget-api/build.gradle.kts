@@ -57,7 +57,7 @@ afterEvaluate {
 
                 pom {
                     name.set("rear-widget-api")
-                    description.set("REAREye rear widget API")
+                    description.set("Seine rear widget API")
                     inceptionYear.set("2026")
                     url.set("https://github.com/killerprojecte/REAREye")
                     licenses {

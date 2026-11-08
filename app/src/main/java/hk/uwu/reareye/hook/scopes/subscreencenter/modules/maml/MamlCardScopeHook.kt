@@ -6,6 +6,7 @@ import android.os.Handler
 import android.os.Looper
 import android.view.MotionEvent
 import android.view.View
+import hk.uwu.reareye.BuildConfig
 import hk.uwu.reareye.hook.support.YLog
 import hk.uwu.reareye.hook.support.hookAppContext
 import hk.uwu.reareye.hook.support.hookAppInfo
@@ -76,7 +77,7 @@ class MamlCardScopeHook : RoxyHooker() {
                     }
                     val identities = fields.mapNotNull { field ->
                         val extras = field.get(card) as? android.os.Bundle ?: return@mapNotNull null
-                        if (extras.getString("__xposed_origin__") != "hk.uwu.reareye") return@mapNotNull null
+                        if (extras.getString("__xposed_origin__") != BuildConfig.APPLICATION_ID) return@mapNotNull null
                         requireNotNull(
                             MamlCardScopeFiles.moduleIdentity(
                                 extras.getString("__xposed_origin__"),

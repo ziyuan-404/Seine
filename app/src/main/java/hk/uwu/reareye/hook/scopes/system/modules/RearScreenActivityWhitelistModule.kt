@@ -6,6 +6,7 @@ import com.highcapable.kavaref.extension.makeAccessible
 import hk.uwu.reareye.hook.support.YLog
 import hk.uwu.reareye.hook.support.hookPrefs
 import hk.uwu.reareye.ui.config.ConfigKeys
+import hk.uwu.reareye.ui.config.RearAppDefaults
 import hk.uwu.roxyhook.HotReloadPolicy
 import hk.uwu.roxyhook.PackageScope
 import hk.uwu.roxyhook.RoxyHooker
@@ -48,7 +49,7 @@ class RearScreenActivityWhitelistModule : RoxyHooker() {
                             true
                         )
                     ) return@before
-                    val whitelist = hookPrefs.getStringSet(ConfigKeys.ACTIVITIES_WHITELIST_APPS)
+                    val whitelist = hookPrefs.getStringSet(ConfigKeys.ACTIVITIES_WHITELIST_APPS, RearAppDefaults.ALLOWED_APPS)
                     val field = asiRef.firstField {
                         name = "REAR_SCREEN_METADATA_WHITE_LIST"
                         type = Set::class.java
@@ -77,7 +78,7 @@ class RearScreenActivityWhitelistModule : RoxyHooker() {
                             true
                         )
                     ) return@before
-                    val whitelist = hookPrefs.getStringSet(ConfigKeys.ACTIVITIES_WHITELIST_APPS)
+                    val whitelist = hookPrefs.getStringSet(ConfigKeys.ACTIVITIES_WHITELIST_APPS, RearAppDefaults.ALLOWED_APPS)
                     val field = asiRef.firstField {
                         name = "REAR_SCREEN_METADATA_WHITE_LIST"
                         type = Set::class.java
@@ -112,7 +113,7 @@ class RearScreenActivityWhitelistModule : RoxyHooker() {
                             true
                         )
                     ) return@after
-                    val whitelist = hookPrefs.getStringSet(ConfigKeys.ACTIVITIES_WHITELIST_APPS)
+                    val whitelist = hookPrefs.getStringSet(ConfigKeys.ACTIVITIES_WHITELIST_APPS, RearAppDefaults.ALLOWED_APPS)
                     val inWhitelist = result<Boolean>()
                     if (inWhitelist == false) {
                         val arObj = args(0).value ?: return@after

@@ -3,12 +3,13 @@ package hk.uwu.reareye.hook.scopes.subscreencenter.modules.rearwidget
 import android.app.Notification
 import android.os.Bundle
 import android.service.notification.StatusBarNotification
+import hk.uwu.reareye.BuildConfig
 
 internal object NotificationRouteBridgeContract {
     const val HOOK_HOST_PACKAGE = "com.xiaomi.subscreencenter"
     const val SOURCE_HOST_PACKAGE = "com.android.systemui"
     const val CARD_ID_PREFIX = "__ordinary_channel__"
-    const val MODULE_PACKAGE = "hk.uwu.reareye"
+    const val MODULE_PACKAGE = BuildConfig.APPLICATION_ID
     const val PENDING_DELETIONS_PREF = "rear_activity_card_pending_deletions"
     val deletionJournalLock = Any()
 

@@ -121,7 +121,7 @@ class ActivityPickerSafetyTest {
     fun disabledDefinitionStillExistsButDeletedDefinitionDoesNot() {
         val id = "00000000-0000-0000-0000-000000000001"
         val raw =
-            """[{"id":"$id","packageName":"hk.uwu.reareye","business":"activity","enabled":false}]"""
+            """[{"id":"$id","packageName":"fr.uwu.Seine","business":"activity","enabled":false}]"""
         assertEquals(true, MamlActivityCardInvalidation.definitionExists(raw, "activity", id))
         assertEquals(false, MamlActivityCardInvalidation.definitionExists("[]", "activity", id))
         assertEquals(false, MamlActivityCardInvalidation.definitionExists(raw, "other", id))

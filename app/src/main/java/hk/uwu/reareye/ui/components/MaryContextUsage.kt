@@ -1,5 +1,7 @@
 package hk.uwu.reareye.ui.components
 
+import android.view.KeyEvent
+import android.view.View
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -13,7 +15,6 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Close
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -26,15 +27,14 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.PopupProperties
 import hk.uwu.reareye.R
 import hk.uwu.reareye.agent.context.ContextCategory
 import hk.uwu.reareye.agent.context.ContextSegment
@@ -42,6 +42,7 @@ import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.theme.MiuixTheme
+import ui.feice.mochi.basic.MochiPopoverButton
 import java.text.NumberFormat
 import java.util.Locale
 
@@ -146,35 +147,32 @@ internal fun ContextUsageButton(summary: MaryUsageSummary) {
     val screen = LocalConfiguration.current
     val popupWidth = (screen.screenWidthDp - 24).coerceIn(160, 320).dp
     val popupHeight = (screen.screenHeightDp - 88).coerceIn(144, 360).dp
-    Box {
-        // Preserve the existing compact topbar ring; detailed composition lives only in the popup.
-        IconButton(
-            onClick = { expanded = !expanded },
-            modifier = Modifier.testTag("mary-context-usage").semantics(mergeDescendants = true) {
-                contentDescription = description
-                ratio?.let { progressBarRangeInfo = ProgressBarRangeInfo(it.toFloat().coerceIn(0f, 1f), 0f..1f) }
-            },
-        ) {
-            Canvas(Modifier.size(20.dp).testTag("mary-context-ring")) {
-                val stroke = 2.dp.toPx()
-                drawCircle(colors.outline, radius = (size.minDimension - stroke) / 2, style = Stroke(stroke))
-                val sweep = contextProgressSweep(ratio)
-                if (sweep != 0f) drawArc(
-                    colors.primary, startAngle = -90f, sweepAngle = sweep, useCenter = false,
-                    topLeft = Offset(stroke / 2, stroke / 2),
-                    size = Size(size.width - stroke, size.height - stroke),
-                    style = Stroke(stroke, cap = StrokeCap.Butt),
-                )
-            }
+    val rootView = LocalView.current.rootView
+    DisposableEffect(rootView, expanded) {
+        val escapeListener = View.OnUnhandledKeyEventListener { _, event ->
+            if (event.keyCode == KeyEvent.KEYCODE_ESCAPE) {
+                if (event.action == KeyEvent.ACTION_UP) expanded = false
+                true
+            } else false
         }
-        DropdownMenu(
-            expanded = expanded, onDismissRequest = { expanded = false },
-            modifier = Modifier.width(popupWidth).heightIn(max = popupHeight).testTag("mary-context-popup"),
-            offset = DpOffset(0.dp, 2.dp), properties = PopupProperties(focusable = true),
-            shape = RoundedCornerShape(18.dp), containerColor = colors.surface,
-            tonalElevation = 0.dp, shadowElevation = 6.dp,
-        ) {
-            Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp)) {
+        val listening = expanded
+        if (listening) rootView.addOnUnhandledKeyEventListener(escapeListener)
+        onDispose { if (listening) rootView.removeOnUnhandledKeyEventListener(escapeListener) }
+    }
+    MochiPopoverButton(
+        expanded = expanded,
+        onExpandedChange = { expanded = it },
+        modifier = Modifier.width(40.dp).testTag("mary-context-usage").semantics(mergeDescendants = true) {
+            contentDescription = description
+            ratio?.let { progressBarRangeInfo = ProgressBarRangeInfo(it.toFloat().coerceIn(0f, 1f), 0f..1f) }
+        },
+        width = popupWidth,
+        contentPadding = PaddingValues(12.dp),
+        buttonPadding = PaddingValues(0.dp),
+        buttonMinHeight = 40.dp,
+        behavior = SeineMenuDefaults.Trailing,
+        popover = {
+            Column(Modifier.fillMaxWidth().heightIn(max = popupHeight).testTag("mary-context-popup")) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Text(stringResource(R.string.mary_context_short_title), style = MiuixTheme.textStyles.body2,
                         fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f).testTag("mary-context-title"),
@@ -218,7 +216,7 @@ internal fun ContextUsageButton(summary: MaryUsageSummary) {
                     ContextStrip(displayed, if (displayed.isEmpty()) 0f else 1f,
                         Modifier.fillMaxWidth().height(10.dp))
                 }
-                Box(Modifier.width(popupWidth - 24.dp).height(48.dp)) {
+                Box(Modifier.fillMaxWidth().height(48.dp)) {
                     LazyRow(Modifier.fillMaxSize().testTag("mary-context-legend-list"), state = legendState, horizontalArrangement = Arrangement.spacedBy(6.dp),
                         verticalAlignment = Alignment.CenterVertically) {
                         itemsIndexed(displayed) { index, segment ->
@@ -288,6 +286,18 @@ internal fun ContextUsageButton(summary: MaryUsageSummary) {
                         modifier = Modifier.padding(top = 4.dp, bottom = 4.dp))
                 }
             }
+        },
+    ) {
+        Canvas(Modifier.size(20.dp).testTag("mary-context-ring")) {
+            val stroke = 2.dp.toPx()
+            drawCircle(colors.outline, radius = (size.minDimension - stroke) / 2, style = Stroke(stroke))
+            val sweep = contextProgressSweep(ratio)
+            if (sweep != 0f) drawArc(
+                colors.primary, startAngle = -90f, sweepAngle = sweep, useCenter = false,
+                topLeft = Offset(stroke / 2, stroke / 2),
+                size = Size(size.width - stroke, size.height - stroke),
+                style = Stroke(stroke, cap = StrokeCap.Butt),
+            )
         }
     }
 }

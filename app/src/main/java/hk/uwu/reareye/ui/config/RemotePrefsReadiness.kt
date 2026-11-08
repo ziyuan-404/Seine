@@ -37,7 +37,7 @@ internal fun rememberRemotePrefsStatusRevision(): Int {
 
         refreshRunnable = Runnable {
             if (!active) return@Runnable
-            XposedModuleStatus.refresh()
+            XposedModuleStatus.refreshAsync()
             revision++
         }
         val statusObserver: (ModuleActivationState) -> Unit = { scheduleRefresh() }

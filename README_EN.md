@@ -2,21 +2,21 @@
   <img src="https://reareye-gh.uwu.hk/favicon-32.png" alt="REAREye logo" width="160" />
 </p>
 
-<h1 align="center">REAREye</h1>
+<h1 align="center">𝒮ℯ𝒾𝓃ℯ</h1>
 
 <p align="center">
-  A rear-screen enhancement module for Xiaomi 17 Pro / 17 Pro Max.<br>
+  A rear-screen enhancement module for Xiaomi 17 Pro / 17 Pro Max, forked from <a href="https://github.com/killerprojecte/REAREye">REAREye</a>.<br>
   Built on LSPosed / Xposed, it provides finer-grained controls for the system framework, Subscreen Center, Theme Manager, and System UI.
 </p>
 
 <p align="center">
-  <a href="./README.md">中文</a> · <a href="https://github.com/killerprojecte/REAREye">Project Home</a>
+  <a href="./README.md">中文</a> · <a href="https://github.com/ziyuan-404/Seine">Project Home</a>
 </p>
 
 <p align="center">
-  <a href="https://github.com/killerprojecte/REAREye/releases"><img src="https://img.shields.io/github/v/release/killerprojecte/REAREye?display_name=tag" alt="GitHub release"></a>
-  <a href="https://github.com/killerprojecte/REAREye/blob/main/LICENSE"><img src="https://img.shields.io/github/license/killerprojecte/REAREye" alt="GitHub license"></a>
-  <a href="https://github.com/killerprojecte/REAREye/issues"><img src="https://img.shields.io/github/issues/killerprojecte/REAREye" alt="GitHub issues"></a>
+  <a href="https://github.com/ziyuan-404/Seine/releases"><img src="https://img.shields.io/github/v/release/ziyuan-404/Seine?display_name=tag" alt="GitHub release"></a>
+  <a href="https://github.com/ziyuan-404/Seine/blob/main/LICENSE"><img src="https://img.shields.io/github/license/ziyuan-404/Seine" alt="GitHub license"></a>
+  <a href="https://github.com/ziyuan-404/Seine/issues"><img src="https://img.shields.io/github/issues/ziyuan-404/Seine" alt="GitHub issues"></a>
   <a href="https://developer.android.com/"><img src="https://img.shields.io/badge/Android-16%2B-3DDC84?logo=android&logoColor=white" alt="Android"></a>
   <a href="https://github.com/LSPosed/LSPosed"><img src="https://img.shields.io/badge/Framework-LSPosed%20%2F%20Xposed-5C6BC0" alt="Framework"></a>
 </p>
@@ -39,40 +39,81 @@
 - Provide Quick Settings tiles for moving apps between the main and rear screens, plus shortcuts for
   force-stopping target apps.
 
-## Fork enhancements (ziyuan-404)
+## Fork Features
 
-The fork is maintained on [`develop/2.0`](https://github.com/ziyuan-404/REAREye/tree/develop/2.0), with integrated upstream `dev` updates.
+This fork continues development on [REAREye](https://github.com/killerprojecte/REAREye).
 
-- Rear app catalog, DPI and display-region controls, input-method support, face verification, and native launch gestures.
-- Circular third-party icons in both the stock app picker and honeycomb layout; honeycomb icons retain the stock translucent blur rim.
-- Selected notification mirroring, grouped notifications, two-way dismissal, front-screen handoff, and ordering adapted to the rear pager's direction. SystemUI's virtual “More notifications” entry is excluded.
-- Recorder cards reuse the stock timer, animated waveform, and icon-only pause/resume and stop controls. Playback uses the stock focus notification on the front screen as well, with native recorder controls shared by both displays.
-- Liquid charging animation and configurable rear-screen timeout.
+**Use case** Receive notifications, read messages and send quick replies while your phone is face down.
 
-Enable the required features in the module settings. Recorder playback adaptation also requires `com.android.soundrecorder` in the LSPosed module scope and a restart of the recorder app.
+- **Rear-screen notification cards** mirror main-screen notifications in the rear notification-card area, enhance notification security and animations, and provide buttons for quick rear-screen actions.
+- **Rear app management** adds app cards, supports the stock app picker and a new honeycomb layout, and allows more apps to run on the rear screen.
+- **WeChat / QQ adaptations** add dedicated rear-screen scopes to improve app launching, input and notifications, alongside the Baidu input-method scope.
+- **Keyboard and interaction** support the current input method in rear-screen text fields, keep input fields clear of the keyboard, and adapt back gestures, swiping up to return Home, and launch-origin animations.
+- **Interface animations** reference **STRAY洋葱**’s animation designs, used with permission.
+- **Module interface** rebuilt with Mochi Compose, including a Mochi theme, predictive back, liquid menus and navigation, with settings grouped by function. [Mochi Compose](https://github.com/feice11/mochi-compose)
+- **Display adjustments** bring together equivalent DPI, display bounds, corner radius, timeout and per-app compatibility, with draggable bounds, sliders and previews of the display region and corners.
+- **App security** supports face verification before opening rear-screen apps.
+- **Notification cards and charging** adapt notification order to rear-screen paging, filter the system’s “More notifications” entry, and add charging effects and screen-on display options.
+- **Recorder and timer cards** adapt recording, stopwatch and countdown scenarios using the HyperOS 4 design language.
+- **Backup and restore** support JSON files and clipboard import and export.
+- **Compatibility and performance** improvements reduce repeated initialization, load app catalogs asynchronously, reuse configuration components, and control rendering through Mochi graphics quality.
+
+## Screenshots
+
+On-device screenshots from this fork. Click an image to view it at full size.
+
+<table>
+  <tr>
+    <td width="50%" align="center">
+      <p><strong>Rear app list</strong></p>
+      <a href="./docs/images/rear-app-list.png"><img src="./docs/images/rear-app-list.png" width="460" alt="Rear app list"></a>
+      <p>Browse and launch allowed apps on the rear screen.</p>
+    </td>
+    <td width="50%" align="center">
+      <p><strong>Apps on the rear screen</strong></p>
+      <a href="./docs/images/rear-app-xiaohongshu.png"><img src="./docs/images/rear-app-xiaohongshu.png" width="460" alt="Apps on the rear screen"></a>
+      <p>Xiaohongshu running on the rear screen.</p>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" align="center">
+      <p><strong>Notification cards</strong></p>
+      <a href="./docs/images/rear-notification.png"><img src="./docs/images/rear-notification.png" width="460" alt="Notification cards"></a>
+      <p>App icons, notification content and grouped entries.</p>
+    </td>
+    <td width="50%" align="center">
+      <p><strong>Grouped notifications</strong></p>
+      <a href="./docs/images/rear-grouped-notification.png"><img src="./docs/images/rear-grouped-notification.png" width="460" alt="Grouped notifications"></a>
+      <p>Multiple notifications from one app grouped together.</p>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" align="center">
+      <p><strong>Notification details</strong></p>
+      <a href="./docs/images/rear-private-notification.png"><img src="./docs/images/rear-private-notification.png" width="460" alt="Notification details"></a>
+      <p>Notification summary with a tap-to-view details entry.</p>
+    </td>
+    <td width="50%" align="center">
+      <p><strong>Download progress</strong></p>
+      <a href="./docs/images/rear-download.png"><img src="./docs/images/rear-download.png" width="460" alt="Download progress"></a>
+      <p>Download progress and notification actions on the rear screen.</p>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" align="center">
+      <p><strong>Recorder card</strong></p>
+      <a href="./docs/images/rear-recorder.png"><img src="./docs/images/rear-recorder.png" width="460" alt="Recorder card"></a>
+      <p>Native recording time and controls.</p>
+    </td>
+    <td width="50%" align="center">
+      <p><strong>Stopwatch card</strong></p>
+      <a href="./docs/images/rear-stopwatch.png"><img src="./docs/images/rear-stopwatch.png" width="460" alt="Stopwatch card"></a>
+      <p>Rear-screen timing and quick controls.</p>
+    </td>
+  </tr>
+</table>
 
 ## Main Features
-
-### Module Settings
-
-- Theme style
-    - Supports Miuix and Monet styles.
-    - Supports system, light, and dark modes.
-- Navigation bar style
-    - Supports standard, floating, and floating liquid-glass styles.
-- Search bar style
-    - Supports default and Miuix styles.
-- Store API
-    - Supports Aliyun, Cloudflare, and custom API domains.
-    - For custom domains, enter only the host name without `https://` or a path.
-- WebView hardware acceleration
-    - Enabled by default. Disable it if Markdown previews crash on your device.
-- Favorite configs
-    - Long-press config nodes to save frequently used options.
-- Hide launcher entry
-    - Optionally hide the REAREye launcher icon.
-- More debug output
-    - Helps diagnose module behavior and compatibility issues.
 
 ### System Framework Enhancements
 
@@ -202,10 +243,10 @@ Enable the required features in the module settings. Recorder playback adaptatio
     - Move the current app to the rear screen.
     - Move a previously transferred app back to the main screen.
 - Home status and quick actions
-    - Shows module status, version, build channel, update status, and root status.
+    - Shows activation status, the LSPosed version, rear-app and notification-app counts, system component versions, and update status.
     - Provides force-stop shortcuts for Subscreen Center, Theme Manager, and System UI.
 - About page
-    - Shows project links, docs, QQ group, Coolapk page, contributors, and sponsorship entry.
+    - Shows device information, project links, docs, contributors, sponsorship and references.
 
 ## Module Scope
 
@@ -215,12 +256,18 @@ Default scope includes these target processes:
 - `com.xiaomi.subscreencenter`
 - `com.android.thememanager`
 - `com.android.systemui`
+- `com.miui.personalassistant`
+- `com.miui.weather2`
+- `com.miui.gallery`
+- `com.miui.voiceassist`
+- `com.baidu.input_mi`
+- `com.android.soundrecorder`
 
 ## Requirements
 
 - Android 16 / API 36 or later.
 - LSPosed / Xposed compatible environment.
-- Xposed minimum version 93.
+- A compatible framework supporting libxposed API 102.
 - A target device with a rear screen. This repository mainly targets Xiaomi 17 Pro / 17 Pro Max.
 - Root permission is required for some features or quick actions, such as force-stopping target apps
   and moving apps between the main and rear screens.
@@ -229,8 +276,8 @@ Default scope includes these target processes:
 ## Installation
 
 1. Download and install the latest APK
-   from [Releases](https://github.com/killerprojecte/REAREye/releases).
-2. Enable `REAREye` in LSPosed or a compatible framework.
+   from [Releases](https://github.com/ziyuan-404/Seine/releases).
+2. Enable `Seine` in LSPosed or a compatible framework.
 3. Make sure the module scope includes `android`, `com.xiaomi.subscreencenter`,
    `com.android.thememanager`, and `com.android.systemui`.
 4. Reboot the device, or at least restart the relevant target apps before configuring the module.
@@ -250,8 +297,7 @@ Default scope includes these target processes:
 - Some quick actions and system-level features require root authorization.
 - Store-managed widgets, cards, and notification routes keep their source metadata. Confirm whether
   you want to uninstall or overwrite them before manual edits.
-- This module does not include a rear-screen app launcher. Use ADB or another launcher method if you
-  need to start apps directly on the rear screen.
+- Configure allowed rear apps under Configuration → More → Rear screen enhancements, then launch them from the rear app list.
 - After unlocking the template count limit, very large template sets should still be tested for
   stability.
 - If Markdown previews in store details crash, disable WebView hardware acceleration in module
@@ -272,7 +318,7 @@ Default scope includes these target processes:
 
 The project uses Kotlin, Jetpack Compose, Android Gradle Plugin, and Gradle Wrapper.
 
-- JDK 17.
+- JDK 21.
 - Android SDK / Build Tools 37.
 - Compile SDK 37, min SDK 36, target SDK 37.
 - For release signing, configure these values in `local.properties`, Gradle properties, or
@@ -293,9 +339,9 @@ Build outputs are generated under `app/build/outputs/`. Release builds also expo
 
 ## Help
 
-- Report issues: [Issues](https://github.com/killerprojecte/REAREye/issues)
-- View releases: [Releases](https://github.com/killerprojecte/REAREye/releases)
-- Repository: [killerprojecte/REAREye](https://github.com/killerprojecte/REAREye)
+- Report issues: [Issues](https://github.com/ziyuan-404/Seine/issues)
+- View releases: [Releases](https://github.com/ziyuan-404/Seine/releases)
+- Repository: [ziyuan-404/Seine](https://github.com/ziyuan-404/Seine)
 
 ## Disclaimer
 

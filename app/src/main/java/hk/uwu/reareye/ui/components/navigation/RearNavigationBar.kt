@@ -10,48 +10,43 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
-import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.BorderStyle
-import androidx.compose.material.icons.rounded.Cottage
 import androidx.compose.material.icons.rounded.Edit
-import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.LibraryMusic
 import androidx.compose.material.icons.rounded.Menu
 import androidx.compose.material.icons.rounded.Route
-import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.Wallpaper
 import androidx.compose.material.icons.rounded.Widgets
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -104,17 +99,23 @@ import com.kyant.capsule.ContinuousCapsule
 import hk.uwu.reareye.R
 import hk.uwu.reareye.ui.config.ConfigType
 import hk.uwu.reareye.ui.config.ModuleNavigationBarMode
-import hk.uwu.reareye.utils.BlurredBar
-import hk.uwu.reareye.utils.blend.rememberBlurBackdrop
+import kotlinx.collections.immutable.toPersistentList
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Icon
-import top.yukonga.miuix.kmp.basic.NavigationBar
-import top.yukonga.miuix.kmp.basic.NavigationBarDisplayMode
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.overlay.OverlayBottomSheet
 import top.yukonga.miuix.kmp.theme.MiuixTheme
+import ui.feice.mochi.basic.MochiTabBar
+import ui.feice.mochi.basic.MochiTabBarDefaults
+import ui.feice.mochi.basic.MochiTabItem
+import ui.feice.mochi.effect.glass.MochiBackdrop
+import ui.feice.mochi.icons.MochiIconStyle
+import ui.feice.mochi.icons.MochiIonicon
+import ui.feice.mochi.theme.MochiGlass
+import ui.feice.mochi.theme.MochiGlassRecipe
+import ui.feice.mochi.theme.MochiTheme
 
 sealed interface NavigationQuickTarget {
     @Immutable
@@ -133,8 +134,7 @@ private data class NavigationQuickAction(
 private data class NavigationDestination(
     val route: String,
     val label: String,
-    val icon: ImageVector,
-    val quickActions: List<NavigationQuickAction> = emptyList(),
+    val icon: String,
 )
 
 @Immutable
@@ -155,6 +155,8 @@ private const val MARY_ROUTE = "mary"
 private const val CONFIG_ROUTE = "config"
 private const val ABOUT_ROUTE = "about"
 private const val EDIT_QUICK_ACTIONS_KEY = "__edit_quick_actions__"
+// Mochi places equal-width tabs inside this inset in both solid and glass bars.
+private val NavigationTabInset = 4.dp
 private const val QUICK_ACTION_BUTTON_WIDTH_DP = 176
 private const val QUICK_ACTION_HALF_LONG_PRESS_MIN_MS = 180L
 
@@ -163,8 +165,7 @@ fun RearNavigationBar(
     modifier: Modifier = Modifier,
     currentScreen: String,
     navigationBarMode: ModuleNavigationBarMode,
-    backdrop: Backdrop,
-    shadowVisibilityProgress: Float = 1f,
+    backdrop: MochiBackdrop?,
     quickActionIds: List<String> = DefaultNavigationQuickActionIds,
     onQuickActionIdsChanged: (List<String>) -> Unit = {},
     onScreenSelected: (String) -> Unit,
@@ -184,67 +185,39 @@ fun RearNavigationBar(
             .take(MaxNavigationQuickActions)
     }
 
-    val items = remember(
-        homeLabel,
-        maryLabel,
-        configLabel,
-        aboutLabel,
-        enabledQuickActions,
-    ) {
+    val destinations = remember(homeLabel, maryLabel, configLabel, aboutLabel) {
         listOf(
-            NavigationDestination(
-                route = HOME_ROUTE,
-                label = homeLabel,
-                icon = Icons.Rounded.Cottage,
-            ),
-            NavigationDestination(
-                route = MARY_ROUTE,
-                label = maryLabel,
-                icon = Icons.Rounded.AutoAwesome,
-            ),
-            NavigationDestination(
-                route = CONFIG_ROUTE,
-                label = configLabel,
-                icon = Icons.Rounded.Settings,
-                quickActions = enabledQuickActions,
-            ),
-            NavigationDestination(
-                route = ABOUT_ROUTE,
-                label = aboutLabel,
-                icon = Icons.Rounded.Info,
-            ),
+            NavigationDestination(HOME_ROUTE, homeLabel, "home"),
+            NavigationDestination(MARY_ROUTE, maryLabel, "sparkles"),
+            NavigationDestination(CONFIG_ROUTE, configLabel, "options"),
+            NavigationDestination(ABOUT_ROUTE, aboutLabel, "information-circle"),
         )
     }
-    val quickMenuController = remember { NavigationQuickMenuController() }
-    var expandedQuickActionsRoute by remember { mutableStateOf<String?>(null) }
-    var showQuickActionEditor by remember { mutableStateOf(false) }
-
-    fun openQuickActions(
-        item: NavigationDestination,
-        anchorCenterX: Float,
-        anchorTop: Float,
-        density: Float
-    ) {
-        if (item.quickActions.isNotEmpty()) {
-            quickMenuController.begin(anchorCenterX, anchorTop, density)
-            expandedQuickActionsRoute = item.route
-        }
+    val tabs = remember(destinations) {
+        destinations.map { destination ->
+            MochiTabItem(
+                label = destination.label,
+                selectedIcon = { tint ->
+                    MochiIonicon(destination.icon, style = MochiIconStyle.Filled, tint = tint, size = 22.dp)
+                },
+            ) { tint ->
+                MochiIonicon(destination.icon, style = MochiIconStyle.Outline, tint = tint, size = 22.dp)
+            }
+        }.toPersistentList()
     }
+    val quickMenuController = remember { NavigationQuickMenuController() }
+    var quickActionsExpanded by remember { mutableStateOf(false) }
+    var tabMotionReset by remember { mutableIntStateOf(0) }
 
     fun closeQuickActions() {
-        expandedQuickActionsRoute = null
+        quickActionsExpanded = false
         quickMenuController.reset()
     }
 
+    var showQuickActionEditor by remember { mutableStateOf(false) }
     fun openEditor() {
         closeQuickActions()
         showQuickActionEditor = true
-    }
-
-    fun selectQuickAction(target: NavigationQuickTarget) {
-        quickMenuController.reset()
-        onQuickActionSelected(target)
-        expandedQuickActionsRoute = null
     }
 
     NavigationQuickActionEditor(
@@ -258,134 +231,103 @@ fun RearNavigationBar(
         },
     )
 
-    if (navigationBarMode == ModuleNavigationBarMode.NORMAL || navigationBarMode == ModuleNavigationBarMode.SEMI_TRANSPARENT) {
-        val bar: @Composable () -> Unit = {
-            NavigationBar(
-                modifier = modifier,
-                color = if (navigationBarMode == ModuleNavigationBarMode.NORMAL) {
-                    MiuixTheme.colorScheme.surface
-                } else {
-                    Color.Transparent
-                },
-                mode = NavigationBarDisplayMode.IconAndText,
-            ) {
-                items.forEach { item ->
-                    RearNavigationBarItem(
-                        item = item,
-                        selected = currentScreen == item.route,
-                        expanded = expandedQuickActionsRoute == item.route,
-                        navigationBarMode = navigationBarMode,
-                        editLabel = editLabel,
-                        quickMenuController = quickMenuController,
-                        onClick = {
-                            closeQuickActions()
-                            onScreenSelected(item.route)
-                        },
-                        onOpenQuickActions = { anchorCenterX, anchorTop, density ->
-                            openQuickActions(item, anchorCenterX, anchorTop, density)
-                        },
-                        onDismissQuickActions = ::closeQuickActions,
-                        onOpenEditor = ::openEditor,
-                        onQuickActionSelected = ::selectQuickAction,
-                    )
-                }
-            }
+    val floating = navigationBarMode == ModuleNavigationBarMode.FLOATING ||
+        navigationBarMode == ModuleNavigationBarMode.FLOATING_GLASS
+    val itemWidth = if (floating) 76.dp else 92.dp
+    val maxWidth = itemWidth * tabs.size + NavigationTabInset * 2
+    val configIndex = destinations.indexOfFirst { it.route == CONFIG_ROUTE }
+    val selectedIndex = destinations.indexOfFirst { it.route == currentScreen }.coerceAtLeast(0)
+    val surface = MochiTheme.colorScheme.surfaceContainerHigh
+    val material = remember(navigationBarMode, surface) {
+        when (navigationBarMode) {
+            ModuleNavigationBarMode.SEMI_TRANSPARENT ->
+                MochiGlass(surface, MochiGlassRecipe(blur = 24.dp), blurOnly = true)
+            ModuleNavigationBarMode.FLOATING_GLASS -> MochiGlass(
+                fallback = surface,
+                light = MochiGlassRecipe(
+                    blur = 8.dp,
+                    refraction = 27.dp,
+                    refractionHeight = 15.5.dp,
+                    fillLighten = 0.18f,
+                    edgeLightKey = 1f,
+                    edgeLightFill = 0.8f,
+                ),
+                dark = MochiGlassRecipe(
+                    blur = 8.dp,
+                    refraction = 27.dp,
+                    refractionHeight = 15.5.dp,
+                    fillDarken = 0.28f,
+                    edgeLightKey = 0.8f,
+                    edgeLightFill = 0.6f,
+                ),
+            )
+            else -> null
         }
-        if (navigationBarMode == ModuleNavigationBarMode.SEMI_TRANSPARENT) {
-            val enable = rememberBlurBackdrop(true)
-            BlurredBar(backdrop = enable, bar)
-        } else {
-            bar()
-        }
-        return
     }
 
-    val enableGlass = navigationBarMode == ModuleNavigationBarMode.FLOATING_GLASS
-    val selectedIndex = items.indexOfFirst { it.route == currentScreen }.coerceAtLeast(0)
-    val selectedItem = items.getOrNull(selectedIndex)
-    val selectedOverlayQuickGesture = selectedItem?.let { item ->
-        Modifier.navigationQuickActionDragGesture(
-            enabled = item.quickActions.isNotEmpty(),
-            actions = item.quickActions,
-            quickMenuController = quickMenuController,
-            onOpenQuickActions = { anchorCenterX, anchorTop, density ->
-                openQuickActions(item, anchorCenterX, anchorTop, density)
-            },
-            onDismissQuickActions = ::closeQuickActions,
-            onOpenEditor = ::openEditor,
-            onQuickActionSelected = ::selectQuickAction,
-        )
-    } ?: Modifier
-
-    FloatingBottomBar(
+    Box(
         modifier = modifier
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = {},
-            )
-            .padding(
-                bottom = 12.dp + WindowInsets.navigationBars.asPaddingValues()
-                    .calculateBottomPadding()
-            ),
-        selectedIndex = selectedIndex,
-        onSelected = {
-            closeQuickActions()
-            onScreenSelected(items[it].route)
-        },
-        backdrop = backdrop,
-        tabsCount = items.size,
-        isBlurEnabled = enableGlass,
-        shadowVisibilityProgress = shadowVisibilityProgress,
-        selectedOverlayModifier = Modifier,
-        renderDuplicateContentLayer = true,
-        quickGestureModifier = selectedOverlayQuickGesture,
-    ) {
-        items.forEachIndexed { index, item ->
-            FloatingBottomBarItem(
-                onClick = {
+            .navigationBarsPadding()
+            .padding(horizontal = 16.dp)
+            .padding(bottom = if (floating) 12.dp else 8.dp)
+            .widthIn(max = maxWidth)
+            .fillMaxWidth()
+            .navigationQuickActionDragGesture(
+                itemIndex = configIndex,
+                itemCount = tabs.size,
+                actions = enabledQuickActions,
+                quickMenuController = quickMenuController,
+                onOpenQuickActions = { anchorCenterX, anchorTop, density ->
+                    quickMenuController.begin(anchorCenterX, anchorTop, density)
+                    quickActionsExpanded = true
+                },
+                onDismissQuickActions = ::closeQuickActions,
+                onOpenEditor = ::openEditor,
+                onQuickActionSelected = { target ->
                     closeQuickActions()
-                    onScreenSelected(items[index].route)
+                    onQuickActionSelected(target)
                 },
-                quickGestureModifier = Modifier.navigationQuickActionDragGesture(
-                    enabled = item.quickActions.isNotEmpty(),
-                    actions = item.quickActions,
-                    quickMenuController = quickMenuController,
-                    onOpenQuickActions = { anchorCenterX, anchorTop, density ->
-                        openQuickActions(item, anchorCenterX, anchorTop, density)
-                    },
-                    onDismissQuickActions = ::closeQuickActions,
-                    onOpenEditor = ::openEditor,
-                    onQuickActionSelected = ::selectQuickAction,
-                ),
-                popup = {
-                    NavigationQuickActionsPopup(
-                        expanded = expandedQuickActionsRoute == item.route,
-                        actions = item.quickActions,
-                        navigationBarMode = navigationBarMode,
-                        editLabel = editLabel,
-                        quickMenuController = quickMenuController,
-                        onDismissRequest = ::closeQuickActions,
-                        onOpenEditor = ::openEditor,
-                        onActionSelected = ::selectQuickAction,
-                    )
+            ),
+    ) {
+        key(tabMotionReset) {
+            MochiTabBar(
+                selectedIndex = selectedIndex,
+                onSelect = { index ->
+                    if (quickMenuController.takeTabGesture()) {
+                        // The glass bar has already animated to the release target.
+                        if (material != null) tabMotionReset++
+                    } else {
+                        closeQuickActions()
+                        onScreenSelected(destinations[index].route)
+                    }
                 },
-                modifier = Modifier.defaultMinSize(minWidth = 76.dp),
-            ) {
-                Icon(
-                    imageVector = item.icon,
-                    contentDescription = item.label,
-                    tint = MiuixTheme.colorScheme.onSurface,
-                )
-                Text(
-                    text = item.label,
-                    fontSize = 11.sp,
-                    lineHeight = 14.sp,
-                    color = MiuixTheme.colorScheme.onSurface,
-                    maxLines = 1,
-                    softWrap = false,
-                    overflow = TextOverflow.Visible,
-                )
+                onReselect = { quickMenuController.takeTabGesture() },
+                items = tabs,
+                behavior = MochiTabBarDefaults.behavior(itemWidth = itemWidth),
+                windowInsets = WindowInsets(0, 0, 0, 0),
+                material = material,
+                backdrop = backdrop,
+            )
+        }
+        Row(Modifier.matchParentSize().padding(horizontal = NavigationTabInset)) {
+            repeat(tabs.size) { index ->
+                Box(Modifier.weight(1f)) {
+                    if (index == configIndex) {
+                        NavigationQuickActionsPopup(
+                            expanded = quickActionsExpanded,
+                            actions = enabledQuickActions,
+                            navigationBarMode = navigationBarMode,
+                            editLabel = editLabel,
+                            quickMenuController = quickMenuController,
+                            onDismissRequest = ::closeQuickActions,
+                            onOpenEditor = ::openEditor,
+                            onActionSelected = { target ->
+                                closeQuickActions()
+                                onQuickActionSelected(target)
+                            },
+                        )
+                    }
+                }
             }
         }
     }
@@ -445,95 +387,6 @@ private fun rememberNavigationQuickActions(): List<NavigationQuickAction> {
                 icon = Icons.Rounded.LibraryMusic,
                 target = NavigationQuickTarget.ConfigManager(ConfigType.ManagerType.LYRICS),
             ),
-        )
-    }
-}
-
-@Composable
-private fun RowScope.RearNavigationBarItem(
-    item: NavigationDestination,
-    selected: Boolean,
-    expanded: Boolean,
-    navigationBarMode: ModuleNavigationBarMode,
-    editLabel: String,
-    quickMenuController: NavigationQuickMenuController,
-    onClick: () -> Unit,
-    onOpenQuickActions: (anchorCenterX: Float, anchorTop: Float, density: Float) -> Unit,
-    onDismissQuickActions: () -> Unit,
-    onOpenEditor: () -> Unit,
-    onQuickActionSelected: (NavigationQuickTarget) -> Unit,
-) {
-    val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
-    val onSurfaceContainerColor = MiuixTheme.colorScheme.onSurfaceContainer
-    val tint = when {
-        isPressed -> if (selected) {
-            onSurfaceContainerColor.copy(alpha = 0.5f)
-        } else {
-            onSurfaceContainerColor.copy(alpha = 0.6f)
-        }
-
-        selected -> onSurfaceContainerColor
-        else -> onSurfaceContainerColor.copy(alpha = 0.4f)
-    }
-    val fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal
-
-    Box(
-        modifier = Modifier
-            .height(64.dp)
-            .weight(1f),
-        contentAlignment = Alignment.Center,
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .navigationQuickActionDragGesture(
-                    enabled = item.quickActions.isNotEmpty(),
-                    actions = item.quickActions,
-                    quickMenuController = quickMenuController,
-                    onOpenQuickActions = onOpenQuickActions,
-                    onDismissQuickActions = onDismissQuickActions,
-                    onOpenEditor = onOpenEditor,
-                    onQuickActionSelected = onQuickActionSelected,
-                )
-                .combinedClickable(
-                    interactionSource = interactionSource,
-                    indication = null,
-                    onClick = onClick,
-                    onLongClick = null,
-                ),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Top,
-        ) {
-            Icon(
-                imageVector = item.icon,
-                contentDescription = item.label,
-                tint = tint,
-                modifier = Modifier
-                    .padding(top = 8.dp)
-                    .size(26.dp),
-            )
-            Text(
-                modifier = Modifier.padding(bottom = 8.dp),
-                text = item.label,
-                color = tint,
-                fontSize = 12.sp,
-                fontWeight = fontWeight,
-                maxLines = 1,
-                softWrap = false,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-
-        NavigationQuickActionsPopup(
-            expanded = expanded,
-            actions = item.quickActions,
-            navigationBarMode = navigationBarMode,
-            editLabel = editLabel,
-            quickMenuController = quickMenuController,
-            onDismissRequest = onDismissQuickActions,
-            onOpenEditor = onOpenEditor,
-            onActionSelected = onQuickActionSelected,
         )
     }
 }
@@ -962,6 +815,14 @@ private fun AutoShrinkText(
 
 private class NavigationQuickMenuController {
     private var densityScaleFallback = 1f
+    var ownsTabGesture = false
+    var barOffset = Offset.Zero
+
+    fun takeTabGesture(): Boolean {
+        val owned = ownsTabGesture
+        ownsTabGesture = false
+        return owned
+    }
 
     var hoveredKey by mutableStateOf<String?>(null)
         private set
@@ -1029,7 +890,8 @@ private class NavigationQuickMenuController {
 }
 
 private fun Modifier.navigationQuickActionDragGesture(
-    enabled: Boolean,
+    itemIndex: Int,
+    itemCount: Int,
     actions: List<NavigationQuickAction>,
     quickMenuController: NavigationQuickMenuController,
     onOpenQuickActions: (anchorCenterX: Float, anchorTop: Float, density: Float) -> Unit,
@@ -1037,17 +899,21 @@ private fun Modifier.navigationQuickActionDragGesture(
     onOpenEditor: () -> Unit,
     onQuickActionSelected: (NavigationQuickTarget) -> Unit,
 ): Modifier {
-    if (!enabled) return this
+    if (actions.isEmpty()) return this
 
-    var rootOffset = Offset.Zero
     return this
         .onGloballyPositioned { coordinates ->
-            rootOffset = coordinates.positionInRoot()
+            quickMenuController.barOffset = coordinates.positionInRoot()
         }
-        .pointerInput(actions) {
+        .pointerInput(actions, itemIndex, itemCount) {
             awaitEachGesture {
                 val down =
                     awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                quickMenuController.ownsTabGesture = false
+                val inset = NavigationTabInset.toPx()
+                val tabWidth = (size.width - 2 * inset) / itemCount
+                val tabLeft = inset + tabWidth * itemIndex
+                if (down.position.x !in tabLeft..(tabLeft + tabWidth)) return@awaitEachGesture
                 val longPressTimeout = maxOf(
                     QUICK_ACTION_HALF_LONG_PRESS_MIN_MS,
                     viewConfiguration.longPressTimeoutMillis / 2,
@@ -1068,7 +934,9 @@ private fun Modifier.navigationQuickActionDragGesture(
 
                 if (!longPressTriggered) return@awaitEachGesture
 
-                val anchorCenterX = rootOffset.x + size.width / 2f
+                quickMenuController.ownsTabGesture = true
+                val rootOffset = quickMenuController.barOffset
+                val anchorCenterX = rootOffset.x + tabLeft + tabWidth / 2f
                 val anchorTop = rootOffset.y
                 onOpenQuickActions(anchorCenterX, anchorTop, density)
                 var latestRootPosition = rootOffset + down.position

@@ -9,6 +9,7 @@ import hk.uwu.reareye.ui.components.config.BooleanConfigInput
 import hk.uwu.reareye.ui.components.config.EnumSingleSelectConfigInput
 import hk.uwu.reareye.ui.components.config.DensityDpiConfigInput
 import hk.uwu.reareye.ui.components.config.FloatSliderConfigInput
+import hk.uwu.reareye.ui.components.config.MochiSeedConfigInput
 import hk.uwu.reareye.ui.components.config.ManagerConfigInput
 import hk.uwu.reareye.ui.components.config.MaskMultiSelectConfigInput
 import hk.uwu.reareye.ui.components.config.RearStoreApiConfigInput
@@ -17,6 +18,19 @@ import kotlin.math.pow
 import kotlin.math.roundToInt
 
 sealed class ConfigType {
+    data object ColorSeed : ConfigType() {
+        @Composable
+        override fun RenderInput(
+            item: ConfigItem,
+            prefsManager: PrefsManager,
+            onOpenAppList: (ConfigItem) -> Unit,
+            onOpenManager: (ConfigItem) -> Unit,
+            onPreferenceChanged: (ConfigItem) -> Unit,
+        ) {
+            MochiSeedConfigInput(item, prefsManager, onPreferenceChanged)
+        }
+    }
+
     @Composable
     abstract fun RenderInput(
         item: ConfigItem,

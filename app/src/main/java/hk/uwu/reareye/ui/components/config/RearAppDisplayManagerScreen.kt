@@ -16,8 +16,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -40,28 +38,34 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import ui.feice.mochi.list.MochiListCard
+import ui.feice.mochi.navigation.MochiBackButton
+import ui.feice.mochi.navigation.MochiTitleBar
+import ui.feice.mochi.basic.MochiButton
+import ui.feice.mochi.basic.MochiButtonDefaults
+import ui.feice.mochi.basic.MochiButtonStyle
+import ui.feice.mochi.icons.MochiIonicon
+import ui.feice.mochi.theme.LocalContentColor
+import ui.feice.mochi.theme.MochiTheme
 import hk.uwu.reareye.R
 import hk.uwu.reareye.ui.config.ConfigKeys
 import hk.uwu.reareye.ui.config.RearAppDefaults
 import hk.uwu.reareye.ui.config.PrefsManager
 import kotlinx.coroutines.delay
 import org.json.JSONArray
-import top.yukonga.miuix.kmp.basic.Button
-import top.yukonga.miuix.kmp.basic.Card
-import top.yukonga.miuix.kmp.basic.Icon
-import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.Slider
 import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.basic.TopAppBar
-import top.yukonga.miuix.kmp.preference.SwitchPreference
 import top.yukonga.miuix.kmp.theme.MiuixTheme
-import kotlin.math.abs
 import kotlin.math.min
 import kotlin.math.roundToInt
 
 private const val MIN_REGION_SIZE = .2f
+private val RegionSliderInsets = PaddingValues(horizontal = 16.dp, vertical = 12.dp)
+private val RegionSliderSpacing = 8.dp
+
 private data class RearDisplayGeometry(
     val width: Int = 976,
     val height: Int = 596,
@@ -113,26 +117,34 @@ private data class RearDisplayRegion(
 }
 
 @Composable
-fun RearAppDisplayManagerScreen(prefsManager: PrefsManager, onBack: () -> Unit) {
+fun RearAppDisplayManagerScreen(
+    prefsManager: PrefsManager,
+    onBack: () -> Unit,
+    embedded: Boolean = false,
+    bottomPadding: Dp = 0.dp,
+    extraSettings: (@Composable () -> Unit)? = null,
+) {
     val context = LocalContext.current
     val geometry = remember(context) { RearDisplayGeometry.read(context) }
     val safe = geometry.safeRegion
     val limits = RearDisplayRegion()
-    val defaultRegion = RearDisplayRegion(.292f, 0f, 1f, 1f)
+    val defaultRegion = remember { RearDisplayRegion.read(RearAppDefaults.REGION, limits) }
     var region by remember { mutableStateOf(defaultRegion) }
     var automatic by remember { mutableStateOf(false) }
     var rounded by remember { mutableStateOf(true) }
+    var cameraFill by remember { mutableStateOf(false) }
     var radius by remember { mutableStateOf(RearAppDefaults.CORNER_RADIUS) }
     var loaded by remember { mutableStateOf(false) }
     var unavailable by remember { mutableStateOf(false) }
-    BackHandler(onBack = onBack)
+    BackHandler(enabled = !embedded && !LocalConfigOwnsBack.current, onBack = onBack)
     LaunchedEffect(Unit) {
         repeat(40) {
             if (prefsManager.isRemoteReady()) {
                 val raw = prefsManager.getString(ConfigKeys.REAR_APP_REGION, RearAppDefaults.REGION)
-                region = RearDisplayRegion.read(raw, safe)
+                region = if (raw.isBlank()) safe else RearDisplayRegion.read(raw, defaultRegion)
                 automatic = raw.isBlank()
                 rounded = prefsManager.getBoolean(ConfigKeys.REAR_APP_ROUNDED, true)
+                cameraFill = prefsManager.getBoolean(ConfigKeys.REAR_APP_CAMERA_FILL, false)
                 radius = prefsManager.getFloat(ConfigKeys.REAR_APP_CORNER_RADIUS, RearAppDefaults.CORNER_RADIUS).coerceIn(0f, 180f)
                 loaded = true
                 return@LaunchedEffect
@@ -142,19 +154,17 @@ fun RearAppDisplayManagerScreen(prefsManager: PrefsManager, onBack: () -> Unit) 
         unavailable = true
     }
     Scaffold(topBar = {
-        TopAppBar(
+        if (!embedded) MochiTitleBar(
             title = stringResource(R.string.rear_app_display_title),
             navigationIcon = {
-                IconButton(onClick = onBack) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
-                }
+                MochiBackButton(onClick = onBack)
             },
         )
     }) { padding ->
         LazyColumn(
-            modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
-            contentPadding = PaddingValues(top = padding.calculateTopPadding() + 12.dp,
-                bottom = padding.calculateBottomPadding() + 24.dp),
+            modifier = Modifier.fillMaxSize().padding(horizontal = ConfigUi.HorizontalInset),
+            contentPadding = PaddingValues(top = (if (embedded) 0.dp else padding.calculateTopPadding()) + 12.dp,
+                bottom = (if (embedded) bottomPadding else padding.calculateBottomPadding()) + 24.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             if (!loaded) {
@@ -177,9 +187,11 @@ fun RearAppDisplayManagerScreen(prefsManager: PrefsManager, onBack: () -> Unit) 
                         color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
                 }
                 item {
-                    Card {
-                        Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    MochiListCard {
+                        Column(
+                            modifier = Modifier.padding(RegionSliderInsets),
+                            verticalArrangement = Arrangement.spacedBy(RegionSliderSpacing),
+                        ) {
                             RegionEdgeSlider(R.string.rear_app_region_left, region.left,
                                 limits.left..maxOf(limits.left, region.right - MIN_REGION_SIZE)) {
                                 region = region.copy(left = it); automatic = false
@@ -200,59 +212,125 @@ fun RearAppDisplayManagerScreen(prefsManager: PrefsManager, onBack: () -> Unit) 
                     }
                 }
                 item {
-                    Card {
-                        SwitchPreference(title = stringResource(R.string.rear_app_rounded),
+                    MochiListCard {
+                        ConfigSwitchRow(title = stringResource(R.string.rear_app_camera_fill),
+                            summary = stringResource(R.string.rear_app_camera_fill_desc),
+                            checked = cameraFill, onCheckedChange = { cameraFill = it })
+                    }
+                }
+                item {
+                    MochiListCard {
+                        ConfigSwitchRow(title = stringResource(R.string.rear_app_rounded),
                             checked = rounded, onCheckedChange = { rounded = it })
                         if (rounded) {
-                            SwitchPreference(title = stringResource(R.string.rear_app_corner_auto),
+                            ConfigSwitchRow(title = stringResource(R.string.rear_app_corner_auto),
                                 checked = radius == 0f,
                                 onCheckedChange = { radius = if (it) 0f else RearAppDefaults.CORNER_RADIUS })
                             if (radius > 0f) {
-                                Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-                                    Text(stringResource(R.string.rear_app_corner_radius, radius.roundToInt()))
-                                    Slider(value = radius, onValueChange = { radius = it.roundToInt().toFloat() },
-                                        valueRange = 1f..180f, modifier = Modifier.fillMaxWidth())
-                                }
+                                DisplayAdjustmentSlider(
+                                    title = stringResource(R.string.rear_app_corner_radius, radius.roundToInt()),
+                                    value = radius,
+                                    range = 1f..180f,
+                                    modifier = Modifier.padding(RegionSliderInsets),
+                                    onChange = { radius = it.roundToInt().toFloat() },
+                                )
                             }
                         }
                     }
                 }
-                item {
-                    Button(onClick = { region = safe; automatic = true },
-                        modifier = Modifier.fillMaxWidth()) {
-                        Text(stringResource(R.string.rear_app_region_reset))
+                item(key = "region_actions") {
+                    ConfigCard {
+                        Column(
+                            modifier = Modifier.padding(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp),
+                        ) {
+                            MochiButton(
+                                onClick = {
+                                    region = defaultRegion
+                                    automatic = false
+                                    rounded = true
+                                    radius = RearAppDefaults.CORNER_RADIUS
+                                    cameraFill = false
+                                },
+                                style = MochiButtonStyle.Outlined,
+                                modifier = Modifier.fillMaxWidth(),
+                            ) {
+                                MochiIonicon("refresh", size = 16.dp, tint = LocalContentColor.current)
+                                Text(stringResource(R.string.rear_app_region_reset), color = LocalContentColor.current)
+                            }
+                            MochiButton(
+                                onClick = {
+                                    prefsManager.prefs.edit()
+                                        .putString(ConfigKeys.REAR_APP_REGION, if (automatic) "" else region.encode())
+                                        .putBoolean(ConfigKeys.REAR_APP_ROUNDED, rounded)
+                                        .putBoolean(ConfigKeys.REAR_APP_CAMERA_FILL, cameraFill)
+                                        .putFloat(ConfigKeys.REAR_APP_CORNER_RADIUS, radius)
+                                        .apply()
+                                    Toast.makeText(context, R.string.rear_app_region_saved, Toast.LENGTH_SHORT).show()
+                                    if (!embedded) onBack()
+                                },
+                                colors = MochiButtonDefaults.colors(MochiButtonStyle.Filled).copy(
+                                    container = MiuixTheme.colorScheme.primary,
+                                    content = MiuixTheme.colorScheme.onPrimary,
+                                ),
+                                modifier = Modifier.fillMaxWidth(),
+                            ) {
+                                MochiIonicon("checkmark", size = 16.dp, tint = LocalContentColor.current)
+                                Text(stringResource(R.string.rear_app_region_save), color = LocalContentColor.current)
+                            }
+                            Text(
+                                text = stringResource(R.string.rear_app_region_unsaved),
+                                style = MiuixTheme.textStyles.footnote1,
+                                color = MochiTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(horizontal = 4.dp),
+                            )
+                        }
                     }
                 }
-                item {
-                    Text(stringResource(R.string.rear_app_region_unsaved),
-                        color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
-                    Button(onClick = {
-                        prefsManager.prefs.edit()
-                            .putString(ConfigKeys.REAR_APP_REGION, if (automatic) "" else region.encode())
-                            .putBoolean(ConfigKeys.REAR_APP_ROUNDED, rounded)
-                            .putFloat(ConfigKeys.REAR_APP_CORNER_RADIUS, radius)
-                            .apply()
-                        Toast.makeText(context, R.string.rear_app_region_saved, Toast.LENGTH_SHORT).show()
-                        onBack()
-                    }, modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
-                        Text(stringResource(R.string.rear_app_region_save))
-                    }
-                }
+            }
+            if (extraSettings != null) {
+                item(key = "application_settings") { extraSettings() }
             }
         }
     }
 }
 
 @Composable
-private fun RegionEdgeSlider(titleRes: Int, value: Float, range: ClosedFloatingPointRange<Float>,
-    onChange: (Float) -> Unit) {
+private fun RegionEdgeSlider(
+    titleRes: Int,
+    value: Float,
+    range: ClosedFloatingPointRange<Float>,
+    onChange: (Float) -> Unit,
+) {
     val title = stringResource(titleRes)
-    Text("$title  ${(value * 1000f).roundToInt() / 10f}%")
-    // A tiny remaining range can occur at the minimum size. Keep Slider's range nonempty.
-    Slider(value = value.coerceIn(range.start, range.endInclusive), onValueChange = {
-        onChange(it.coerceIn(range.start, range.endInclusive))
-    }, valueRange = range.start..maxOf(range.start + .00001f, range.endInclusive),
-        modifier = Modifier.fillMaxWidth().semantics { contentDescription = title })
+    DisplayAdjustmentSlider(
+        title = "$title  ${(value * 1000f).roundToInt() / 10f}%",
+        value = value,
+        range = range,
+        sliderDescription = title,
+        onChange = onChange,
+    )
+}
+
+@Composable
+private fun DisplayAdjustmentSlider(
+    title: String,
+    value: Float,
+    range: ClosedFloatingPointRange<Float>,
+    modifier: Modifier = Modifier,
+    sliderDescription: String = title,
+    onChange: (Float) -> Unit,
+) {
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(RegionSliderSpacing)) {
+        Text(title)
+        // Keep Slider's range nonempty when the bounds meet at the minimum region size.
+        Slider(
+            value = value.coerceIn(range.start, range.endInclusive),
+            onValueChange = { onChange(it.coerceIn(range.start, range.endInclusive)) },
+            valueRange = range.start..maxOf(range.start + .00001f, range.endInclusive),
+            modifier = Modifier.fillMaxWidth().semantics { contentDescription = sliderDescription },
+        )
+    }
 }
 
 @Composable
@@ -270,34 +348,36 @@ private fun RearDisplayRegionPreview(region: RearDisplayRegion, geometry: RearDi
             var handle = -1
             detectDragGestures(onDragStart = { start ->
                 val area = latest
-                val corners = listOf(Offset(area.left, area.top), Offset(area.right, area.top),
-                    Offset(area.left, area.bottom), Offset(area.right, area.bottom))
+                val previewSize = Size(size.width.toFloat(), size.height.toFloat())
+                val curve = previewCornerRadius(area, previewSize, geometry, currentRounded, currentRadius)
+                val dotRadius = 4.dp.toPx()
+                val handles = previewHandles(area, previewSize, curve, dotRadius)
+                val hitRadius = 28.dp.toPx()
+                handle = handles.indices.minByOrNull { corner ->
+                    handles[corner].minOf { (it - start).getDistanceSquared() }
+                }?.takeIf { corner ->
+                    handles[corner].any { (it - start).getDistanceSquared() <= hitRadius * hitRadius }
+                } ?: -1
                 val point = Offset(start.x / size.width, start.y / size.height)
-                handle = corners.indices.minByOrNull { (corners[it] - point).getDistance() }
-                    ?.takeIf { abs(corners[it].x - point.x) * size.width < 32.dp.toPx() &&
-                        abs(corners[it].y - point.y) * size.height < 32.dp.toPx() } ?: -1
-                if (handle == -1 && point.x >= area.left && point.x <= area.right &&
-                    point.y >= area.top && point.y <= area.bottom) handle = 4
+                if (handle == -1 && point.x in area.left..area.right &&
+                    point.y in area.top..area.bottom) handle = 2
             }, onDrag = { event, delta ->
                 if (handle < 0) return@detectDragGestures
                 event.consume()
                 val area = latest
                 val dx = delta.x / size.width
                 val dy = delta.y / size.height
-                val next = if (handle == 4) {
+                val next = if (handle == 2) {
                     val width = area.right - area.left
                     val height = area.bottom - area.top
                     val left = (area.left + dx).coerceIn(0f, maxOf(0f, 1f - width))
                     val top = (area.top + dy).coerceIn(0f, maxOf(0f, 1f - height))
                     RearDisplayRegion(left, top, minOf(1f, left + width), minOf(1f, top + height))
                 } else area.copy(
-                    left = if (handle == 0 || handle == 2) (area.left + dx)
-                        .coerceIn(0f, maxOf(0f, area.right - MIN_REGION_SIZE)) else area.left,
-                    top = if (handle == 0 || handle == 1) (area.top + dy)
+                    left = (area.left + dx).coerceIn(0f, maxOf(0f, area.right - MIN_REGION_SIZE)),
+                    top = if (handle == 0) (area.top + dy)
                         .coerceIn(0f, maxOf(0f, area.bottom - MIN_REGION_SIZE)) else area.top,
-                    right = if (handle == 1 || handle == 3) (area.right + dx)
-                        .coerceIn(minOf(1f, area.left + MIN_REGION_SIZE), 1f) else area.right,
-                    bottom = if (handle == 2 || handle == 3) (area.bottom + dy)
+                    bottom = if (handle == 1) (area.bottom + dy)
                         .coerceIn(minOf(1f, area.top + MIN_REGION_SIZE), 1f) else area.bottom,
                 )
                 change(next)
@@ -309,6 +389,7 @@ private fun RearDisplayRegionPreview(region: RearDisplayRegion, geometry: RearDi
         }
         // The camera mask and app preview share the physical screen's rounded outline.
         // App rounding remains a separate draft setting and never changes this outer frame.
+        val curve = previewCornerRadius(region, size, geometry, currentRounded, currentRadius)
         clipPath(physicalOutline) {
             drawRect(Color(0xFF181C25))
             drawRect(Color(0xFF464A53), size = Size(safe.left * size.width, size.height))
@@ -320,9 +401,6 @@ private fun RearDisplayRegionPreview(region: RearDisplayRegion, geometry: RearDi
             val origin = Offset(region.left * size.width, region.top * size.height)
             val activeSize = Size((region.right - region.left) * size.width,
                 (region.bottom - region.top) * size.height)
-            val pixelRadius = if (currentRadius == 0f) geometry.cornerRadius else currentRadius
-            val curve = if (currentRounded) min(pixelRadius * size.width / geometry.width,
-                min(activeSize.width, activeSize.height) / 2f) else 0f
             drawRoundRect(Color(0xFF364F7B), origin, activeSize, CornerRadius(curve))
             drawRoundRect(Color(0xFF95BBFF), origin, activeSize, CornerRadius(curve), style = Stroke(2.dp.toPx()))
             // Physical camera lenses remain visible even when the application is deliberately
@@ -334,11 +412,51 @@ private fun RearDisplayRegionPreview(region: RearDisplayRegion, geometry: RearDi
                 drawCircle(Color(0xFF747983), lens, center, style = Stroke(size.height * .012f))
             }
         }
-        listOf(Offset(region.left, region.top), Offset(region.right, region.top),
-            Offset(region.left, region.bottom), Offset(region.right, region.bottom)).forEach {
-            drawCircle(Color(0xFFE7F0FF), 6.dp.toPx(), Offset(
-                (it.x * size.width).coerceIn(6.dp.toPx(), size.width - 6.dp.toPx()),
-                (it.y * size.height).coerceIn(6.dp.toPx(), size.height - 6.dp.toPx())))
+        val dotRadius = 4.dp.toPx()
+        previewHandles(region, size, curve, dotRadius).forEach { points ->
+            points.forEach { drawCircle(Color.White, dotRadius, it) }
         }
     }
+}
+
+private fun previewCornerRadius(
+    region: RearDisplayRegion,
+    size: Size,
+    geometry: RearDisplayGeometry,
+    rounded: Boolean,
+    radius: Float,
+): Float {
+    if (!rounded) return 0f
+    val pixels = if (radius == 0f) geometry.cornerRadius else radius
+    return min(
+        pixels * size.width / geometry.width,
+        min((region.right - region.left) * size.width, (region.bottom - region.top) * size.height) / 2f,
+    )
+}
+
+private fun previewHandles(
+    region: RearDisplayRegion,
+    size: Size,
+    curve: Float,
+    dotRadius: Float,
+): List<List<Offset>> {
+    val left = region.left * size.width
+    val top = region.top * size.height
+    val bottom = region.bottom * size.height
+
+    fun point(x: Float, y: Float) = Offset(
+        x.coerceIn(dotRadius, maxOf(dotRadius, size.width - dotRadius)),
+        y.coerceIn(dotRadius, maxOf(dotRadius, size.height - dotRadius)),
+    )
+
+    fun corner(y: Float, vertical: Float): List<Offset> {
+        if (curve == 0f) return listOf(point(left, y))
+        val spacing = maxOf(curve, dotRadius * 3f)
+        return listOf(point(left + spacing, y), point(left, y + spacing * vertical))
+    }
+
+    return listOf(
+        corner(top, 1f),
+        corner(bottom, -1f),
+    )
 }

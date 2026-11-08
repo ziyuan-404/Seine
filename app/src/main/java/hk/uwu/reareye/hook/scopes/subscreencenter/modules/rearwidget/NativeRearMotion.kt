@@ -69,6 +69,7 @@ internal object NativeRearMotion {
         // Keep text at its readable native size; music moves its album and text
         // independently instead of scaling the entire page (and its controls).
         content.scaleX = 1f; content.scaleY = 1f; content.translationY = 0f; content.alpha = 1f
+        if (content.findViewWithTag<View>(NativeRearTimerScene.TAG) != null) return
         val scale = if (asleep) 58f / 66f else 1f
         apply(target("notification_icon"), mapOf("SCALE_X" to scale, "SCALE_Y" to scale))
         apply(target("notification_container"), mapOf("TRANSLATION_Y" to

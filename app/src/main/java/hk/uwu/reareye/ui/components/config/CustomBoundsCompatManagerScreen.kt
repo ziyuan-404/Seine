@@ -56,6 +56,10 @@ import hk.uwu.reareye.repository.bounds.CustomBoundsFillMode
 import hk.uwu.reareye.repository.bounds.CustomBoundsMode
 import hk.uwu.reareye.ui.components.DialogFormColumn
 import hk.uwu.reareye.ui.components.OverlayDialog
+import kotlinx.collections.immutable.persistentListOf
+import ui.feice.mochi.basic.MochiConfirmationDialog
+import ui.feice.mochi.basic.MochiDialogAction
+import ui.feice.mochi.basic.MochiDialogActionRole
 import hk.uwu.reareye.ui.components.RearBadgeItem
 import hk.uwu.reareye.ui.components.card.ModuleStyleDeleteAction
 import hk.uwu.reareye.ui.components.card.ModuleStyleIconAction
@@ -79,7 +83,6 @@ import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.ColorPalette
-import top.yukonga.miuix.kmp.basic.DropdownItem
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.InfiniteProgressIndicator
@@ -91,7 +94,6 @@ import top.yukonga.miuix.kmp.basic.TopAppBar
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Delete
 import top.yukonga.miuix.kmp.preference.SwitchPreference
-import top.yukonga.miuix.kmp.preference.WindowSpinnerPreference
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.overScrollVertical
 import top.yukonga.miuix.kmp.utils.scrollEndHaptic
@@ -733,83 +735,45 @@ fun CustomBoundsCompatManagerScreen(
         }
     }
 
-    OverlayDialog(
-        show = rejectedImportPackage != null,
+    MochiConfirmationDialog(
+        visible = rejectedImportPackage != null,
         title = stringResource(R.string.custom_bounds_rule_import_rejected_title),
+        message = stringResource(
+            R.string.custom_bounds_rule_import_app_missing,
+            rejectedImportPackage.orEmpty(),
+        ),
         onDismissRequest = { rejectedImportPackage = null },
-    ) {
-        DialogFormColumn {
-            Text(
-                text = stringResource(
-                    R.string.custom_bounds_rule_import_app_missing,
-                    rejectedImportPackage.orEmpty(),
-                ),
-                style = MiuixTheme.textStyles.body2,
-                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-            )
-            Button(
-                onClick = { rejectedImportPackage = null },
-                colors = ButtonDefaults.buttonColorsPrimary(),
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text(stringResource(R.string.rear_widget_confirm))
-            }
-        }
-    }
+        actions = persistentListOf(
+            MochiDialogAction(stringResource(R.string.rear_widget_confirm), MochiDialogActionRole.Primary),
+        ),
+    )
 
-    OverlayDialog(
-        show = pendingOverwriteConfig != null,
+    MochiConfirmationDialog(
+        visible = pendingOverwriteConfig != null,
         title = stringResource(R.string.custom_bounds_rule_import_overwrite_title),
+        message = stringResource(
+            R.string.custom_bounds_rule_import_overwrite_message,
+            pendingOverwriteConfig?.packageName.orEmpty(),
+        ),
         onDismissRequest = { pendingOverwriteConfig = null },
-    ) {
-        DialogFormColumn {
-            Text(
-                text = stringResource(
-                    R.string.custom_bounds_rule_import_overwrite_message,
-                    pendingOverwriteConfig?.packageName.orEmpty(),
-                ),
-                style = MiuixTheme.textStyles.body2,
-                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-            )
-            Button(
-                onClick = {
-                    pendingOverwriteConfig?.let(::applyImportedConfig)
-                    pendingOverwriteConfig = null
-                },
-                colors = ButtonDefaults.buttonColorsPrimary(),
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text(stringResource(R.string.custom_bounds_rule_import_overwrite_confirm))
-            }
-            Button(
-                onClick = { pendingOverwriteConfig = null },
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text(stringResource(R.string.rear_widget_cancel))
-            }
-        }
-    }
+        actions = persistentListOf(
+            MochiDialogAction(stringResource(R.string.rear_widget_cancel), MochiDialogActionRole.Cancel),
+            MochiDialogAction(
+                stringResource(R.string.custom_bounds_rule_import_overwrite_confirm),
+                MochiDialogActionRole.Primary,
+            ) { pendingOverwriteConfig?.let(::applyImportedConfig) },
+        ),
+    )
 
-    OverlayDialog(
-        show = importErrorMessage != null,
+    MochiConfirmationDialog(
+        visible = importErrorMessage != null,
         title = stringResource(R.string.custom_bounds_rule_import_failed_title),
+        message = importErrorMessage,
         onDismissRequest = { importErrorMessage = null },
-    ) {
-        DialogFormColumn {
-            Text(
-                text = importErrorMessage.orEmpty(),
-                style = MiuixTheme.textStyles.body2,
-                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-            )
-            Button(
-                onClick = { importErrorMessage = null },
-                colors = ButtonDefaults.buttonColorsPrimary(),
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text(stringResource(R.string.rear_widget_confirm))
-            }
-        }
-    }
+        actions = persistentListOf(
+            MochiDialogAction(stringResource(R.string.rear_widget_confirm), MochiDialogActionRole.Primary),
+        ),
+    )
 }
 
 private fun formatFloat(value: Float): String =
@@ -829,17 +793,17 @@ private fun CustomBoundsDropdownPreference(
     onSelected: (Int) -> Unit,
 ) {
     val optionTitles = options.map { stringResource(it.titleRes) }
-    val optionEntries = remember(optionTitles) {
-        optionTitles.map { DropdownItem(title = it) }
-    }
     val selectedIndex = options.indexOfFirst { it.value == selectedValue }.coerceAtLeast(0)
-    WindowSpinnerPreference(
-        modifier = Modifier.clip(androidx.compose.foundation.shape.RoundedCornerShape(16.dp)),
-        items = optionEntries,
-        selectedIndex = selectedIndex,
+    var expanded by remember { mutableStateOf(false) }
+    ConfigDropdownRow(
         title = title,
         summary = description,
-        onSelectedIndexChange = { index -> onSelected(options[index].value) },
+        currentLabel = optionTitles.getOrNull(selectedIndex).orEmpty(),
+        labels = optionTitles,
+        selectedIndex = selectedIndex,
+        expanded = expanded,
+        onExpandedChange = { expanded = it },
+        onSelected = { index -> onSelected(options[index].value) },
     )
 }
 

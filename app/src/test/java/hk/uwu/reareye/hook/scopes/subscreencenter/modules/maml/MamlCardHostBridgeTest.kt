@@ -325,8 +325,8 @@ class MamlCardHostBridgeTest {
         cardId: String = "1a930ae9-f2fc-411d-9edc-5bb4128746fd",
     ) = requireNotNull(
         MamlCardScopeFiles.moduleIdentity(
-            "hk.uwu.reareye",
-            "hk.uwu.reareye",
+            "fr.uwu.Seine",
+            "fr.uwu.Seine",
             business,
             cardId
         )
@@ -343,7 +343,7 @@ class MamlCardHostBridgeTest {
         assertEquals(firstFile, reopenedFile)
         assertEquals(key, bridge.initialize(root(), reopenedFile))
         assertEquals(
-            "module:hk.uwu.reareye:appwidget:1a930ae9-f2fc-411d-9edc-5bb4128746fd",
+            "module:fr.uwu.Seine:appwidget:1a930ae9-f2fc-411d-9edc-5bb4128746fd",
             identity
         )
     }
@@ -362,18 +362,18 @@ class MamlCardHostBridgeTest {
             files.config(moduleIdentity(cardId = "1a930ae9-f2fc-411d-9edc-5bb4128746fe"))
         )
         assertNotEquals(files.config(identity), files.config("app:$identity"))
-        listOf(null, "", "other.pkg", "hk.uwu.reareye ").forEach { invalid ->
+        listOf(null, "", "other.pkg", "fr.uwu.Seine ").forEach { invalid ->
             assertNull(
                 MamlCardScopeFiles.moduleIdentity(
                     invalid,
-                    "hk.uwu.reareye",
+                    "fr.uwu.Seine",
                     "appwidget",
                     "1a930ae9-f2fc-411d-9edc-5bb4128746fd"
                 )
             )
             assertNull(
                 MamlCardScopeFiles.moduleIdentity(
-                    "hk.uwu.reareye",
+                    "fr.uwu.Seine",
                     invalid,
                     "appwidget",
                     "1a930ae9-f2fc-411d-9edc-5bb4128746fd"
@@ -383,8 +383,8 @@ class MamlCardHostBridgeTest {
         listOf(null, "", "app:widget", "app widget", "app/widget", "小组件").forEach { invalid ->
             assertNull(
                 MamlCardScopeFiles.moduleIdentity(
-                    "hk.uwu.reareye",
-                    "hk.uwu.reareye",
+                    "fr.uwu.Seine",
+                    "fr.uwu.Seine",
                     invalid,
                     "1a930ae9-f2fc-411d-9edc-5bb4128746fd"
                 )
@@ -399,8 +399,8 @@ class MamlCardHostBridgeTest {
         ).forEach { invalid ->
             assertNull(
                 MamlCardScopeFiles.moduleIdentity(
-                    "hk.uwu.reareye",
-                    "hk.uwu.reareye",
+                    "fr.uwu.Seine",
+                    "fr.uwu.Seine",
                     "appwidget",
                     invalid
                 )
@@ -408,8 +408,8 @@ class MamlCardHostBridgeTest {
         }
         listOf(
             "module:other.pkg:appwidget:1a930ae9-f2fc-411d-9edc-5bb4128746fd",
-            "module:hk.uwu.reareye::1a930ae9-f2fc-411d-9edc-5bb4128746fd",
-            "$identity:extra", "module:hk.uwu.reareye:appwidget:1-2-3-4-5",
+            "module:fr.uwu.Seine::1a930ae9-f2fc-411d-9edc-5bb4128746fd",
+            "$identity:extra", "module:fr.uwu.Seine:appwidget:1-2-3-4-5",
         ).forEach { invalid ->
             assertFalse(MamlCardScopeFiles.validStorageIdentity(invalid))
             assertFalse(MamlCardScopeFiles.preservesBinding(invalid))
