@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.graphics.Rect
+import android.graphics.RectF
 import android.os.Binder
 import android.os.Handler
 import android.os.IBinder
@@ -30,6 +31,12 @@ class RearSourceAnimationHook : RoxyHooker() {
         loadApp("com.android.systemui") {
             var active = true
             val finishing = mutableSetOf<Runnable>()
+            val surfaceOwners = java.util.concurrent.ConcurrentHashMap<Int, Any>()
+            val runningByTask = java.util.concurrent.ConcurrentHashMap<Int, Runnable>()
+            val handoffFrames = java.util.concurrent.ConcurrentHashMap<Int, FloatArray>()
+            data class RearTask(val origin: RearLaunchOrigin, val model: Any?, var area: RectF? = null)
+            val rearTasks = java.util.concurrent.ConcurrentHashMap<Int, RearTask>()
+            var interruptionReceipts = 8
             val prefs = hookPrefs
             data class PreviewHandoff(val task: Int, val targetPackage: String, val until: Long)
             val previewHandoff = java.util.concurrent.atomic.AtomicReference<PreviewHandoff>()
@@ -79,6 +86,33 @@ class RearSourceAnimationHook : RoxyHooker() {
             val animation = "com.android.wm.shell.multitasking.miuifreeform.MiuiFreeformModeAnimation".toClass()
             val openingMethods = setOf("startMoveToFrontAnimation", "startFullScreenToFreeformAnimation")
             val closingMethods = setOf("startMoveToBackCloseAnimation", "startCloseAnimation")
+            val taskModel = animation.getDeclaredField("mMultiTaskingTaskRepository").type
+                .getMethod("getMiuiFreeformTaskInfo", Int::class.javaPrimitiveType)
+            var returnRouteReceipts = 8
+            animation.resolve().firstMethod {
+                name = "startMiuiFreeformMaximizeMoveToBackTransition"; parameterCount = 7
+            }.hook {
+                hotReloadPolicy = HotReloadPolicy.REINSTALL
+                before {
+                    if (!active || !prefs.getBoolean(ConfigKeys.REAR_APP_ENABLED, RearAppDefaults.ENABLED)) return@before
+                    val change = args[2] ?: return@before
+                    val info = Server.call(change, "getTaskInfo") ?: return@before
+                    if (Server.field(info, "displayId") != 1 ||
+                        Server.call(change, "getStartWindowMode") != 5) return@before
+                    val taskId = Server.field(info, "taskId") as? Int ?: return@before
+                    if (RearLaunchOrigin.fromTask(info) == null && rearTasks[taskId] == null) return@before
+                    val repository = instance?.let { Server.field(it, "mMultiTaskingTaskRepository") } ?: return@before
+                    val task = args[6] ?: taskModel.invoke(repository, taskId)
+                        ?: rearTasks[taskId]?.model ?: return@before
+                    // A rapid Home transition can lack the pending task model.
+                    // The ROM then hides its leash immediately. Supply the live
+                    // model and select its existing move-to-back close branch.
+                    args[0] = 4
+                    args[6] = task
+                    if (returnRouteReceipts-- > 0)
+                        YLog.info("[RearSource] native animated return selected task=$taskId")
+                }
+            }
             animation.declaredMethods.filter { it.name in openingMethods || it.name in closingMethods }.forEach { method ->
                 animation.resolve().firstMethod { name = method.name; parameters(*method.parameterTypes) }.hook {
                     hotReloadPolicy = HotReloadPolicy.REINSTALL
@@ -92,9 +126,14 @@ class RearSourceAnimationHook : RoxyHooker() {
                         }
                         val eligible = active && info != null && Server.field(info, "displayId") == 1 &&
                             prefs.getBoolean(ConfigKeys.REAR_APP_ENABLED, RearAppDefaults.ENABLED)
-                        val origin = if (eligible) RearLaunchOrigin.fromTask(info!!) else null
-                        if (origin != null && method.name in closingMethods) RearCameraAreaFill.onClosingTransition()
                         val taskId = info?.let { Server.field(it, "taskId") as? Int } ?: -1
+                        val origin = if (eligible) RearLaunchOrigin.fromTask(info!!) ?: rearTasks[taskId]?.origin else null
+                        val native = args.filterNotNull().firstOrNull { it.javaClass.simpleName == "MiuiFreeformModeTaskInfo" }
+                        if (origin != null && method.name in openingMethods) {
+                            rearTasks.keys.removeAll { it != taskId && !runningByTask.containsKey(it) }
+                            rearTasks[taskId] = RearTask(origin, native)
+                        }
+                        if (origin != null && method.name in closingMethods) RearCameraAreaFill.onClosingTransition()
                         val appPackage = info?.let { (Server.field(it, "topActivity") as? android.content.ComponentName)
                             ?: (Server.field(it, "baseActivity") as? android.content.ComponentName) }?.packageName
                         val handoff = previewHandoff.get()
@@ -105,7 +144,6 @@ class RearSourceAnimationHook : RoxyHooker() {
                                 (handoff.task < 0 || handoff.task == taskId))
                         val change = args.filterNotNull().firstOrNull { it.javaClass.name == "android.window.TransitionInfo\$Change" }
                         val transactions = args.filterNotNull().filter { it.javaClass.name == "android.view.SurfaceControl\$Transaction" }
-                        val native = args.filterNotNull().firstOrNull { it.javaClass.simpleName == "MiuiFreeformModeTaskInfo" }
                         val buffer = (native?.let { Server.call(it, "getTaskBounds") } as? Rect) ?:
                             (change?.let { Server.call(it, if (method.name in openingMethods) "getEndAbsBounds" else "getStartAbsBounds") } as? Rect)
                         val stack = frames.get() ?: kotlin.collections.ArrayDeque<Frame>().also { frames.set(it) }
@@ -150,14 +188,17 @@ class RearSourceAnimationHook : RoxyHooker() {
             val addRunning = executorType.getMethod("addRunningAnimInfo", control, stateType)
             val complete = executorType.getDeclaredMethod("notifyAnimFinishOrInterrupted", stateType, listenerType).apply { isAccessible = true }
             val remove = executorType.getMethod("removeFolmeStateAndRunFinishRunnable", stateType)
+            val markInterrupted = stateType.getMethod("setInterrupted", Boolean::class.javaPrimitiveType)
             val destination = control.getMethod("updateBaseAnimDestinationParam", stateType)
             var receipts = 6
+            var rejectedReceipts = 6
             executorType.resolve().firstMethod { name = "executeFolmeAnimation"; parameterCount = 1 }.hook {
                 hotReloadPolicy = HotReloadPolicy.REINSTALL
                 before {
                     if (!active) return@before
                     val frame = frames.get()?.lastOrNull() ?: return@before
                     val origin = frame.origin ?: return@before
+                    val rearTask = rearTasks[frame.task]
                     val state = args(0).value ?: return@before
                     if (Server.call(state, "getTaskId") != frame.task) return@before
                     if (frame.opening && Server.call(state, "getAnimationType") != 2) return@before
@@ -199,11 +240,14 @@ class RearSourceAnimationHook : RoxyHooker() {
                         val entry = entries.firstOrNull { valueProperty.get(it) === properties[name] } ?: error("Native card destination missing: $name")
                         return (if (frame.opening) to else from).getFloat(entry)
                     }
-                    val width = value("WIDTH"); val height = value("HEIGHT")
-                    val x = value("CENTER_X") - width / 2f
-                    val y = value("ELEGANT_Y") - height * value("ANCHOR_Y") / 10f
+                    val previousArea = if (frame.opening) null else rearTask?.area
+                    val width = previousArea?.width() ?: value("WIDTH")
+                    val height = previousArea?.height() ?: value("HEIGHT")
+                    val x = previousArea?.left ?: (value("CENTER_X") - width / 2f)
+                    val y = previousArea?.top ?: (value("ELEGANT_Y") - height * value("ANCHOR_Y") / 10f)
                     val full = Rect(x.roundToInt(), y.roundToInt(), (x + width).roundToInt(), (y + height).roundToInt())
                     if (full.isEmpty) return@before
+                    if (frame.opening) rearTask?.area = RectF(x, y, x + width, y + height)
                     val transitions = Server.field(owner, "mTransitions") ?: return@before
                     val shell = Server.call(transitions, "getMainExecutor") as? java.util.concurrent.Executor ?: return@before
                     val tx = transaction.getConstructor().newInstance()
@@ -211,7 +255,10 @@ class RearSourceAnimationHook : RoxyHooker() {
                     var finished = false
                     var registered = false
                     var terminalFrameApplied = false
+                    var interrupted = false
                     var last: FloatArray? = null
+                    val surfaceOwner = Any()
+                    fun ownsSurface() = surfaceOwners[frame.task] === surfaceOwner
                     fun renderPicker(target: Any, values: FloatArray) {
                         // The OEM spring can pass its destination. Keep the task
                         // at the exact Shell bounds while the card settles.
@@ -270,21 +317,24 @@ class RearSourceAnimationHook : RoxyHooker() {
                         setAlpha.invoke(target, leash, values[8].coerceIn(0f, 1f))
                     }
                     lateinit var finish: Runnable
+                    lateinit var interrupt: Runnable
                     finish = Runnable {
                         if (!finished) {
                             finished = true
                             timer.removeCallbacksAndMessages(null)
                             finishing.remove(finish)
+                            runningByTask.remove(frame.task, interrupt)
+                            if (!frame.opening && rearTask != null) rearTasks.remove(frame.task, rearTask)
                             val end = floatArrayOf(full.left.toFloat(), full.top.toFloat(), 1f,
                                 full.left.toFloat(), full.top.toFloat(), full.right.toFloat(), full.bottom.toFloat(),
                                 surfaceRadius ?: last?.get(7) ?: 100f, if (frame.opening) 1f else 0f, 1f)
-                            runCatching {
+                            runCatching { if (ownsSurface() && !interrupted) {
                                 endpointSetters.forEach { (setter, value) -> setter.invoke(fc, value) }
                                 if (Server.call(state, "needUpdateBaseParamAnimComplete") == true)
                                     control.getMethod("updateBaseAnimParam", Boolean::class.javaPrimitiveType)
                                         .invoke(fc, map.containsKey("clip"))
                                 if (!terminalFrameApplied) { render(tx, end); apply.invoke(tx) }
-                            }.onFailure { YLog.warn("OEM rear card surface completion failed", it) }
+                            } }.onFailure { YLog.warn("OEM rear card surface completion failed", it) }
                             // Let the ROM restore the parked task's alpha and
                             // crop in its finish transaction, even on interruption.
                             runCatching { if (registered) complete.invoke(owner, state, listener) }
@@ -292,10 +342,20 @@ class RearSourceAnimationHook : RoxyHooker() {
                             runCatching { if (registered) remove.invoke(owner, state) }
                                 .onFailure { YLog.warn("OEM rear card lifecycle completion failed", it) }
                             closeTransaction.invoke(tx)
+                            surfaceOwners.remove(frame.task, surfaceOwner)
+                        }
+                    }
+                    interrupt = Runnable {
+                        if (!finished) {
+                            interrupted = true
+                            markInterrupted.invoke(state, true)
+                            last?.let { handoffFrames[frame.task] = it.copyOf() }
+                            finish.run()
                         }
                     }
                     fun applyFrame(values: FloatArray, done: Boolean, vsyncId: Long? = null) {
                         if (finished) return
+                        if (!ownsSurface()) { finish.run(); return }
                         last = values
                         runCatching {
                             if (listener != null) update.invoke(listener, tx)
@@ -345,16 +405,34 @@ class RearSourceAnimationHook : RoxyHooker() {
                             return true
                         }
                     }
+                    surfaceOwners[frame.task] = surfaceOwner
                     if (!frame.opening || !frame.preanimated) {
-                        if (!origin.animate(frame.opening, full, callback, surfaceRadius)) { closeTransaction.invoke(tx); return@before }
+                        if (!origin.animate(frame.opening, full, callback, surfaceRadius)) {
+                            if (rejectedReceipts-- > 0)
+                                YLog.warn("OEM rear animation source unavailable: task=${frame.task} open=${frame.opening}")
+                            surfaceOwners.remove(frame.task, surfaceOwner)
+                            closeTransaction.invoke(tx)
+                            return@before
+                        }
                     }
                     // Preserve Shell's original running-state/finish bookkeeping.
-                    // No Folme state, spring, alpha curve or geometry is replaced.
                     result = null
                     destination.invoke(fc, state)
                     addRunning.invoke(owner, fc, state); registered = true
                     if (listener != null) begin.invoke(listener)
+                    // Register the successor before retiring the old state. The
+                    // ROM then defers its interrupted transition finish until
+                    // this animation ends, preserving Shell's merge ownership.
+                    val previous = runningByTask.put(frame.task, interrupt)
+                    previous?.run()
+                    if (previous != null && interruptionReceipts-- > 0)
+                        YLog.info("[RearSource] native interruption handed to successor task=${frame.task}")
+                    val handoff = handoffFrames.remove(frame.task)
                     if (frame.opening) frame.start?.let { setAlpha.invoke(it, leash, 0f) }
+                    else frame.start?.let { render(it, handoff ?: floatArrayOf(
+                        full.left.toFloat(), full.top.toFloat(), 1f,
+                        full.left.toFloat(), full.top.toFloat(), full.right.toFloat(), full.bottom.toFloat(),
+                        surfaceRadius ?: 100f, 1f, 1f)) }
                     finishing.add(finish)
                     timer.postDelayed({ shell.execute(finish) }, 3500L)
                     if (frame.opening && frame.preanimated) {
@@ -363,6 +441,7 @@ class RearSourceAnimationHook : RoxyHooker() {
                         // that endpoint instead of replaying an icon-to-task zoom.
                         timer.post { shell.execute {
                             if (!finished) {
+                                if (!ownsSurface()) { finish.run(); return@execute }
                                 val end = floatArrayOf(full.left.toFloat(), full.top.toFloat(), 1f,
                                     full.left.toFloat(), full.top.toFloat(), full.right.toFloat(), full.bottom.toFloat(),
                                     surfaceRadius ?: 100f, 1f, 1f)
@@ -380,6 +459,10 @@ class RearSourceAnimationHook : RoxyHooker() {
                 receiverHandler.removeCallbacks(registerReceiver)
                 receiverContext?.let { runCatching { it.unregisterReceiver(receiver) } }
                 finishing.toList().forEach { it.run() }
+                surfaceOwners.clear()
+                runningByTask.clear()
+                handoffFrames.clear()
+                rearTasks.clear()
             }
             YLog.info("OEM rear LauncherCardView surface bridge installed")
         }

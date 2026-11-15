@@ -437,10 +437,33 @@ internal class RearFaceFeedback(context: android.content.Context) : View(context
             y = height * .50f
         }
         fun Drawable.drawIcon() {
-            alpha=(iconAlpha*255).toInt().coerceIn(0,255)
             val half = size * iconScale / 2f
             setBounds((x - half).toInt(), (y - half).toInt(), (x + half).toInt(), (y + half).toInt())
-            draw(canvas)
+            val opacity = (iconAlpha * 255).toInt().coerceIn(0, 255)
+            if (inline) {
+                val spread = .6f * scale
+                val layer = canvas.saveLayerAlpha(x-half-spread, y-half-spread,
+                    x+half+spread, y+half+spread, opacity)
+                alpha = 255
+                // Widen the stock animated artwork locally, including its ring
+                // and check mark, while applying the fade once to the group.
+                draw(canvas)
+                for (direction in 0 until 4) {
+                    canvas.save()
+                    when (direction) {
+                        0 -> canvas.translate(spread, 0f)
+                        1 -> canvas.translate(-spread, 0f)
+                        2 -> canvas.translate(0f, spread)
+                        3 -> canvas.translate(0f, -spread)
+                    }
+                    draw(canvas)
+                    canvas.restore()
+                }
+                canvas.restoreToCount(layer)
+            } else {
+                alpha = opacity
+                draw(canvas)
+            }
         }
         if (success && successIcon != null) successIcon.drawIcon() else { ring?.drawIcon(); face?.drawIcon() }
         canvas.restore()

@@ -35,7 +35,10 @@ roxy {
             "com.miui.gallery",
             "com.miui.voiceassist",
             "com.baidu.input_mi",
-            "com.android.soundrecorder"
+            "com.android.soundrecorder",
+            "com.autonavi.minimap",
+            "com.baidu.BaiduMap",
+            "com.google.android.apps.maps"
         )
     )
     nativeEntries.set(

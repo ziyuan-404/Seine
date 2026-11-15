@@ -23,6 +23,7 @@ import hk.uwu.reareye.hook.scopes.subscreencenter.modules.rearwidget.ExtraTimeTi
 import hk.uwu.reareye.hook.scopes.subscreencenter.modules.rearwidget.RearAppHook
 import hk.uwu.reareye.hook.scopes.subscreencenter.modules.rearwidget.RearWidgetHook
 import hk.uwu.reareye.hook.scopes.subscreencenter.modules.rearwidget.RearNotificationSyncHook
+import hk.uwu.reareye.hook.scopes.subscreencenter.modules.rearwidget.RearNavigationHook
 import hk.uwu.reareye.hook.scopes.subscreencenter.modules.charging.RearChargingHook
 import hk.uwu.reareye.hook.scopes.subscreencenter.modules.rearwidget.SystemUiNotificationBridgeHook
 import hk.uwu.reareye.hook.support.YLog
@@ -49,6 +50,7 @@ class SubscreenCenterScope : RoxyHooker(), Scope {
             RearWallpaperHook(),
             RearWidgetHook(),
             RearNotificationSyncHook(),
+            RearNavigationHook(),
             RearChargingHook(),
             RearScreenTimeoutHook(),
             RearAppHomeHook(),

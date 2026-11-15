@@ -30,6 +30,10 @@ class SystemUiNotificationBridgeHook : RoxyHooker() {
     private val routeClient = NotificationRouteBridgeClient()
     private val main = Handler(Looper.getMainLooper())
     private var visibleKeys: List<String>? = null
+    private val promotedFlag by lazy {
+        runCatching { android.app.Notification::class.java.getField("FLAG_PROMOTED_ONGOING").getInt(null) }
+            .getOrDefault(0)
+    }
     private var visibleGroups: Map<String, String> = emptyMap()
     private var syncEnabled: () -> Boolean = { false }
     private var chargingStatus: android.content.Intent? = null
@@ -230,11 +234,27 @@ class SystemUiNotificationBridgeHook : RoxyHooker() {
                                     if (name == "KeyguardCoordinator" || name == "OriginalUnseenKeyguardCoordinator")
                                         collect(entry, 0, keyguardOnly = true)
                                 }
-                                visibleKeys = keys.toList()
+                                val ranks = allEntries.filterNotNull().mapNotNull { entry ->
+                                    val sbn = entry.javaClass.getField("mSbn").get(entry) as? StatusBarNotification
+                                    val ranking = entry.javaClass.methods.firstOrNull {
+                                        it.name == "getRanking" && it.parameterCount == 0
+                                    }?.invoke(entry) as? android.service.notification.NotificationListenerService.Ranking
+                                    if (sbn == null || ranking == null) null else sbn.key to ranking.rank
+                                }.toMap()
+                                // Promoted navigation is rendered above the ordinary shade rows.
+                                val promotedNavigation = allEntries.filterNotNull().mapNotNull { entry ->
+                                    val sbn = entry.javaClass.getField("mSbn").get(entry) as? StatusBarNotification
+                                        ?: return@mapNotNull null
+                                    sbn.key.takeIf { it in keys && sbn.packageName in RearNavigationData.packages &&
+                                        sbn.notification.category == android.app.Notification.CATEGORY_NAVIGATION &&
+                                        sbn.notification.flags and promotedFlag != 0 }
+                                }.sortedBy { ranks[it] ?: Int.MAX_VALUE }
+                                val ordered = (promotedNavigation + keys).distinct()
+                                visibleKeys = ordered
                                 visibleGroups = groups
                                 System.getProperties()[SNAPSHOT] = Bundle().apply {
-                                    putStringArrayList("keys", ArrayList(keys))
-                                    putStringArrayList("groups", ArrayList(keys.map { groups[it] ?: it }))
+                                    putStringArrayList("keys", ArrayList(ordered))
+                                    putStringArrayList("groups", ArrayList(ordered.map { groups[it] ?: it }))
                                 }
                                 if (hookPrefs.getBoolean(ConfigKeys.MORE_DEBUG, false))
                                     YLog.debug("[REAREye-NotifBridge] visible shade keys=${keys.size} filters=$reasons")

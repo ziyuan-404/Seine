@@ -2,7 +2,6 @@ package hk.uwu.reareye.hook.scopes.subscreencenter.modules
 
 import android.app.ActivityManager
 import android.content.Context
-import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
@@ -136,24 +135,7 @@ internal class RearCameraAreaFill(context: Context, private val prefs: HookPrefs
     }
 
     private fun captureEdgeColor(leash: SurfaceControl): Int? {
-        val owner = sequenceOf("android.window.ScreenCaptureInternal", "android.window.ScreenCapture",
-            "android.view.SurfaceControl").mapNotNull { runCatching { Class.forName(it) }.getOrNull() }
-            .firstOrNull { type -> type.methods.any { it.name == "captureLayers" } } ?: return null
-        val argsClass = Class.forName(owner.name + "\$LayerCaptureArgs")
-        val builderClass = Class.forName(argsClass.name + "\$Builder")
-        val builder = builderClass.getConstructor(SurfaceControl::class.java).newInstance(leash)
-        builderClass.getMethod("setFrameScale", Float::class.javaPrimitiveType).invoke(builder, .12f)
-        val args = builderClass.getMethod("build").invoke(builder)
-        val direct = owner.methods.firstOrNull { it.name == "captureLayers" && it.parameterCount == 1 }
-        val buffer = if (direct != null) direct.invoke(null, args) else {
-            val listener = owner.getMethod("createSyncCaptureListener").invoke(null)
-            owner.getMethod("captureLayers", argsClass, listener.javaClass).invoke(null, args, listener)
-            listener.javaClass.getMethod("getBuffer").invoke(listener)
-        } ?: return null
-        val bitmap = buffer.javaClass.getMethod("asBitmap").invoke(buffer) as? Bitmap ?: return null
-        val readable = if (bitmap.config == Bitmap.Config.HARDWARE)
-            bitmap.copy(Bitmap.Config.ARGB_8888, false) ?: run { bitmap.recycle(); return null }
-        else bitmap
+        val readable = RearSurfaceCapture.bitmap(leash, .12f) ?: return null
         return try {
             if (readable.width < 2 || readable.height < 2) return null
             val frequencies = HashMap<Int, IntArray>()
@@ -175,8 +157,7 @@ internal class RearCameraAreaFill(context: Context, private val prefs: HookPrefs
                 Color.rgb(samples[1] / samples[0], samples[2] / samples[0], samples[3] / samples[0])
             }
         } finally {
-            if (readable !== bitmap) readable.recycle()
-            bitmap.recycle()
+            readable.recycle()
         }
     }
 

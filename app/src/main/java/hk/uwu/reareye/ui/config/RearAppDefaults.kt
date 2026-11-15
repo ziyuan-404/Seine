@@ -17,7 +17,7 @@ internal object RearAppDefaults {
         "com.xingin.xhs",
     )
     const val CORNER_RADIUS = 80f
-    const val APP_DPI = 450
+    const val APP_DPI = 300
     /** Baidu's key geometry is a phone layout; 450dpi makes it too narrow on 680px. */
     const val IME_DPI = 240
 

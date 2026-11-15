@@ -5,13 +5,25 @@ import hk.uwu.reareye.R
 import hk.uwu.reareye.hook.support.YLog
 import java.lang.ref.WeakReference
 import java.util.WeakHashMap
+import java.lang.reflect.Field
+import java.lang.reflect.Method
 
 /** Bind mirror content to the factory widget's own backdrop and outline state. */
 internal object NativeRearCardHost {
     private val widgets = WeakHashMap<View, WeakReference<Any>>()
+    private data class PanelFields(val popup: Field, val selected: Field)
+    private val panelFields = object : ClassValue<PanelFields>() {
+        override fun computeValue(type: Class<*>) = PanelFields(
+            type.getDeclaredField("E").apply { isAccessible = true },
+            type.getDeclaredField("I").apply { isAccessible = true })
+    }
+    private val selectedWidget = object : ClassValue<Method>() {
+        override fun computeValue(type: Class<*>) = type.getMethod("d")
+    }
 
-    fun register(widget: Any, root: View) {
+    fun register(widget: Any, root: View, backdrop: Boolean = true) {
         widgets[root] = WeakReference(widget)
+        if (!backdrop) return
         runCatching {
             val context = root.context
             val resources = context.resources
@@ -50,18 +62,19 @@ internal object NativeRearCardHost {
         return runCatching {
             // Match the ROM's N0/R0 priority guard: a stock notification popup
             // can cover the selected widget without hiding its child Views.
-            val popup = panel.javaClass.getDeclaredField("E").apply { isAccessible = true }.get(panel) as? View
+            val fields = panelFields.get(panel.javaClass)
+            val popup = fields.popup.get(panel) as? View
             if (popup?.visibility == View.VISIBLE) return false
             if (panel.rootView.findViewWithTag<View>("reareye_charging_overlay")?.isShown == true) return false
-            val selected = panel.javaClass.getDeclaredField("I").apply { isAccessible = true }.get(panel) ?: return false
-            selected.javaClass.getMethod("d").invoke(selected) === widget
+            val selected = fields.selected.get(panel) ?: return false
+            selectedWidget.get(selected.javaClass).invoke(selected) === widget
         }.getOrDefault(false)
     }
 
     fun selectedMirror(panel: View): View? = runCatching {
-        val selected = panel.javaClass.getDeclaredField("I").apply { isAccessible = true }.get(panel)
+        val selected = panelFields.get(panel.javaClass).selected.get(panel)
             ?: return@runCatching null
-        val widget = selected.javaClass.getMethod("d").invoke(selected) ?: return@runCatching null
+        val widget = selectedWidget.get(selected.javaClass).invoke(selected) ?: return@runCatching null
         widgets.entries.firstOrNull { (root, owner) -> root.isAttachedToWindow && owner.get() === widget }
             ?.key?.findViewById<View>(R.id.rear_notification_card)
     }.getOrNull()

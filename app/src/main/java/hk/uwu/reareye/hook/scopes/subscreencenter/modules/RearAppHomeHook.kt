@@ -53,7 +53,38 @@ class RearAppHomeHook : RoxyHooker() {
                 }.forEach { method ->
                     cardProgress.resolve().firstMethod { name = method.name; parameters(*method.parameterTypes) }.hook {
                         hotReloadPolicy = HotReloadPolicy.REINSTALL
+                        before { (args(0).value as? View)?.let { NativeRearCardAnimation.beforeStockCardProgress(it) } }
                         after { (args(0).value as? View)?.let { NativeRearCardAnimation.onStockCardProgress(it) } }
+                    }
+                }
+                "miuix.animation.controller.FolmeState".toClass().resolve().firstMethod {
+                    name = "to"; parameters(Array<Any>::class.java)
+                }.hook {
+                    hotReloadPolicy = HotReloadPolicy.REINSTALL
+                    before { (args[0] as? Array<*>)?.let(NativeRearCardAnimation::configureStockSpring) }
+                }
+                // Use the velocity computed by the factory Home recognizer.
+                "X1.d".toClass().resolve().firstMethod {
+                    name = "l"; parameters(android.view.MotionEvent::class.java,
+                        Float::class.javaPrimitiveType!!, Float::class.javaPrimitiveType!!)
+                }.hook {
+                    hotReloadPolicy = HotReloadPolicy.REINSTALL
+                    before {
+                        if (!active ||
+                            !hookPrefs.getBoolean(ConfigKeys.REAR_APP_ENABLED, RearAppDefaults.ENABLED)) return@before
+                        NativeRearCardAnimation.recordHomeVelocity(-(args[2] as Float))
+                    }
+                }
+                val recentGesture = "X1.x".toClass()
+                val recentVelocity = recentGesture.getDeclaredField("E").apply { isAccessible = true }
+                recentGesture.resolve().firstMethod {
+                    name = "g"; parameters(android.view.MotionEvent::class.java)
+                }.hook {
+                    hotReloadPolicy = HotReloadPolicy.REINSTALL
+                    after {
+                        if (!active) return@after
+                        val velocity = recentVelocity.get(instance) as? android.graphics.PointF ?: return@after
+                        NativeRearCardAnimation.recordHomeVelocity(-velocity.y * 1000f)
                     }
                 }
                 "com.xiaomi.subscreencenter.launcher.LauncherCardView".toClass().resolve().firstMethod {
@@ -121,21 +152,24 @@ class RearAppHomeHook : RoxyHooker() {
                     launcher.getMethod("a", String::class.java, Float::class.javaPrimitiveType)
                 }.getOrNull()
                 val nativeBlurProgress = runCatching { launcher.getMethod("c") }.getOrNull()
-                var blurOwner: Activity? = null
+                var blurOwner = java.lang.ref.WeakReference<Activity>(null)
                 fun syncRearBlur(activity: Activity, appVisible: Boolean) {
                     if (nativeBlur == null) return
                     if (appVisible) {
                         val progress = runCatching {
                             (nativeBlurProgress?.invoke(activity) as? Number)?.toFloat() ?: 0f
                         }.getOrDefault(0f)
-                        if (blurOwner === activity || progress < .99f) {
+                        if (progress < .99f) {
                             runCatching { nativeBlur.invoke(activity, "rearApp", 1f) }
                                 .onFailure { YLog.warn("Native rear app backdrop blur unavailable", it) }
-                            blurOwner = activity
                         }
-                    } else if (blurOwner === activity) {
-                        blurOwner = null
+                        // Adopt an already-raised native backdrop as well. The
+                        // picker may have raised it before the external task.
+                        blurOwner = java.lang.ref.WeakReference(activity)
+                    } else if (blurOwner.get() === activity) {
                         runCatching { nativeBlur.invoke(activity, "rearApp", 0f) }
+                            .onSuccess { blurOwner.clear() }
+                            .onFailure { YLog.warn("Clearing rear app backdrop failed", it) }
                     }
                 }
                 val field = launcher.declaredFields.single { panelClass.isAssignableFrom(it.type) }
@@ -147,6 +181,19 @@ class RearAppHomeHook : RoxyHooker() {
                 }.apply { isAccessible=true }
                 var registerAppHomeGesture:(()->Unit)?=null
                 var syncAfterLaunch: (() -> Unit)? = null
+                var rearAppWasVisible = false
+                val navigationHandler = android.os.Handler(android.os.Looper.getMainLooper())
+                val syncNavigationJob = Runnable {
+                    if (active) runCatching { syncAfterLaunch?.invoke() }
+                        .onFailure { YLog.warn("Synchronizing rear app navigation failed", it) }
+                }
+                fun scheduleNavigationSync() {
+                    navigationHandler.removeCallbacks(syncNavigationJob)
+                    // Task visibility can lag the focus and gesture callbacks.
+                    listOf(0L, 120L, 350L, 800L).forEach { delay ->
+                        navigationHandler.postDelayed(syncNavigationJob, delay)
+                    }
+                }
                 val assistant="com.xiaomi.subscreencenter.SmartAssistantPanel".toClass()
                 val assistantField=launcher.declaredFields.single { assistant.isAssignableFrom(it.type) }.apply { isAccessible=true }
                 val showAssistant=assistant.getMethod("setAssistantVisibleImpl",Boolean::class.javaPrimitiveType)
@@ -178,7 +225,10 @@ class RearAppHomeHook : RoxyHooker() {
                         if (!active || activity.isDestroyed) return@runCatching
                         val panel = field.get(activity) ?: return@runCatching
                         if (opening) scalePickerList.invoke(panel, 1f, .8f)
-                        else scalePickerList.invoke(panel, .8f, 1f)
+                        else {
+                            val list = panelClass.getDeclaredField("h").apply { isAccessible = true }.get(panel) as View
+                            scalePickerList.invoke(panel, list.scaleX, 1f)
+                        }
                     }.onFailure { YLog.warn("Native rear picker list animation failed", it) }
                 }
                 NativeRearCardAnimation.preparePicker = prepare
@@ -206,6 +256,7 @@ class RearAppHomeHook : RoxyHooker() {
                     runCatching {
                         val activity=currentLauncher.invoke(null) as? Activity
                         if(active&&activity!=null&&!activity.isDestroyed) {
+                            rearAppWasVisible = true
                             val popupType = "com.xiaomi.subscreencenter.NotificationPanel".toClass()
                             launcher.declaredFields.firstOrNull { it.type == popupType }?.apply { isAccessible = true }
                                 ?.get(activity)?.let { popupType.getMethod("e", String::class.java).invoke(it, "rearApp") }
@@ -214,9 +265,7 @@ class RearAppHomeHook : RoxyHooker() {
                             // hiding/reopening the list resets it to the first row.
                             registerAppHomeGesture?.invoke()
                             syncRearBlur(activity, true)
-                            listOf(32L, 120L, 350L, 800L).forEach { delay ->
-                                activity.window.decorView.postDelayed({ if (active) syncAfterLaunch?.invoke() }, delay)
-                            }
+                            scheduleNavigationSync()
                         }
                     }.onFailure { YLog.warn("Retaining native rear picker after app launch failed",it) }
                 }
@@ -241,21 +290,25 @@ class RearAppHomeHook : RoxyHooker() {
                 var nativeGestureFinished = false
                 val returnHome=Runnable {
                     val activity=currentLauncher.invoke(null) as? Activity
-                    if(active&&hookPrefs.getBoolean(ConfigKeys.REAR_APP_ENABLED, RearAppDefaults.ENABLED)&&activity!=null&&rearAppForeground()) {
+                    val appTask = rearAppTask()
+                    if(active&&hookPrefs.getBoolean(ConfigKeys.REAR_APP_ENABLED, RearAppDefaults.ENABLED)&&activity!=null&&appTask!=null) {
+                        rearAppWasVisible = true
                         YLog.debug("[RearAppHome] " + (if (nativeGestureFinished) "recents fallback" else "native action") + " target=" + activity.taskId)
                         activity.sendBroadcast(Intent(RearLaunchOrigin.CLOSING_ACTION).setPackage("com.android.systemui"))
                         syncRearBlur(activity, false)
                         NativeRearAppLaunch.restoreOriginIfNeeded(toPicker = true)
-                        // A real native recents gesture has already transformed
-                        // its leash. A second Shell close would replay the exit.
-                        val options = if(nativeGestureFinished)
-                            android.app.ActivityOptions.makeCustomAnimation(activity,0,0)
-                        else android.app.ActivityOptions.makeBasic()
+                        // Stock recents excludes rear freeforms. Its completion
+                        // callback still needs Shell to animate those tasks home.
+                        val needsShellAnimation = !nativeGestureFinished ||
+                            hk.uwu.reareye.hook.activityhost.ActivityHostTaskConfigurationAdapter.call(appTask, "getWindowingMode") == 5
+                        val options = if (needsShellAnimation) android.app.ActivityOptions.makeBasic()
+                        else android.app.ActivityOptions.makeCustomAnimation(activity, 0, 0)
                         val launch = options.setLaunchDisplayId(1).toBundle()
                         val stack = rearTasks()
-                        if (!nativeGestureFinished && stack.getOrNull(1)?.taskId == activity.taskId)
+                        if (needsShellAnimation && stack.getOrNull(1)?.taskId == activity.taskId)
                             launch.putInt("hk.uwu.reareye.REAR_PICKER_SOURCE_TASK", stack.first().taskId)
                         bringHome.invoke(taskManager, activity.taskId, launch)
+                        scheduleNavigationSync()
                     }
                 }
                 // The stock recents animation excludes freeform tasks and waits for a
@@ -328,6 +381,9 @@ class RearAppHomeHook : RoxyHooker() {
                 fun syncNavigation(activity:Activity) {
                     if(!active||!hookPrefs.getBoolean(ConfigKeys.REAR_APP_ENABLED, RearAppDefaults.ENABLED))return
                     val appVisible = rearAppTask()?.let { hk.uwu.reareye.hook.activityhost.ActivityHostTaskConfigurationAdapter.call(it, "getWindowingMode") == 5 } == true
+                    if (!appVisible && rearAppWasVisible)
+                        NativeRearAppLaunch.launchOrigin?.returnedToHome()
+                    rearAppWasVisible = appVisible
                     if(appVisible)registerAppHomeGesture?.invoke()
                     else clearAppHomeGesture()
                     syncRearBlur(activity, appVisible)
@@ -352,24 +408,25 @@ class RearAppHomeHook : RoxyHooker() {
                 launcher.resolve().firstMethod { name="onWindowFocusChanged";parameters(Boolean::class.javaPrimitiveType!!) }.hook {
                     hotReloadPolicy=HotReloadPolicy.REINSTALL
                     after {
+                        val activity = instance as? Activity ?: return@after
                         if(args(0).boolean()) {
-                            val activity=instance as? Activity
-                            if(activity!=null&&rearAppForeground()) { syncNavigation(activity);return@after }
+                            syncNavigation(activity)
+                            scheduleNavigationSync()
+                            if(rearAppForeground()) return@after
                             clearAppHomeGesture();NativeRearAppLaunch.restoreOriginIfNeeded()
                             if(restoreNotificationOnFocus) {
                                 restoreNotificationOnFocus=false
                                 (instance as? Activity)?.let(::showNotificationOrigin)
                             }
-                        } else (instance as? Activity)?.let { activity->activity.window.decorView.post { syncNavigation(activity) } }
+                        } else scheduleNavigationSync()
                     }
                 }
                 // Adopt apps already in front after a module/launcher reload.
-                android.os.Handler(android.os.Looper.getMainLooper()).post {
-                    (currentLauncher.invoke(null) as? Activity)?.let(::syncNavigation)
-                }
+                navigationHandler.post(syncNavigationJob)
                 runtime.onClose {
+                    navigationHandler.removeCallbacksAndMessages(null)
                     clearAppHomeGesture()
-                    blurOwner?.let { syncRearBlur(it, false) }
+                    blurOwner.get()?.let { syncRearBlur(it, false) }
                 }
                 val gestureFinish=resolveDexKitMethodInjectionPoint(bridge,"SSC_REAR_APP_GESTURE_FINISH") {
                     findMethod { matcher {
@@ -436,7 +493,10 @@ class RearAppHomeHook : RoxyHooker() {
                 }.hook {
                     id = "reareye.rear.stock-home.resume"
                     hotReloadPolicy = HotReloadPolicy.REINSTALL
-                    after { (instance as? Activity)?.let { open(it, it.intent) } }
+                    after {
+                        (instance as? Activity)?.let { open(it, it.intent) }
+                        scheduleNavigationSync()
+                    }
                 }
                 Activity::class.java.resolve().firstMethod {
                     name = "onNewIntent"

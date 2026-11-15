@@ -2,6 +2,8 @@ package hk.uwu.reareye.hook
 
 import hk.uwu.reareye.hook.core.DexKitBootstrap
 import hk.uwu.reareye.hook.scopes.subscreencenter.SubscreenCenterScope
+import hk.uwu.reareye.hook.scopes.subscreencenter.modules.rearwidget.RearNavigationProviderHook
+import hk.uwu.reareye.hook.scopes.subscreencenter.modules.rearwidget.RearGoogleNavigationViewport
 import hk.uwu.reareye.hook.scopes.subscreencenter.modules.RearFreeformUiHook
 import hk.uwu.reareye.hook.scopes.subscreencenter.modules.RearSourceAnimationHook
 import hk.uwu.reareye.hook.scopes.system.SystemScope
@@ -50,7 +52,10 @@ class HookEntry : RoxyModule(), LibXposedHotReload {
     private fun install(scope: PackageScope) = with(scope) {
         if(!isSystemServer&&!isFirstPackage)return@with
         loadSystem(SystemScope())
+        if (isSystemServer) loadSystem(RearNavigationProviderHook())
         loadAll(SubscreenCenterScope())
+        if (!isSystemServer) loadAll(RearNavigationProviderHook())
+        if (!isSystemServer) loadAll(RearGoogleNavigationViewport())
         loadAll(RearFreeformUiHook())
         loadAll(RearSourceAnimationHook())
         loadAll(ThemeManagerScope())

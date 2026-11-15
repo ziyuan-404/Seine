@@ -6,8 +6,12 @@ import android.widget.RemoteViews
 internal object RearNotificationCards {
     const val BUSINESS = "reareye_notification_mirror"
     const val CARD_PREFIX = "__notification_mirror__:"
+    const val NAVIGATION_BUSINESS = "reareye_navigation"
     var post: ((String, RemoteViews) -> Boolean)? = null
     var remove: ((String) -> Unit)? = null
+    var postNavigation: ((String, RemoteViews) -> Boolean)? = null
+    var removeNavigation: ((String) -> Unit)? = null
+    var reconcileNavigation: ((Set<String>) -> Unit)? = null
     var reconcile: ((Set<String>) -> Unit)? = null
     var onReady: (() -> Unit)? = null
     var hasNativeCard: ((String) -> Boolean)? = null

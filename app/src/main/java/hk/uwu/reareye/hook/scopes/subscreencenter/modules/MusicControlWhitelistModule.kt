@@ -51,15 +51,15 @@ class MusicControlWhitelistModule : RoxyHooker() {
                     val rawMap = registry.primaryMap(snapshot)
                     // Before Application is ready the host returns its empty registry sentinel.
                     if (rawMap === java.util.Collections.EMPTY_MAP) return@after
+                    val apps = hookPrefs.getStringSet(ConfigKeys.MUSIC_CONTROLS_WHITELIST_APPS)
+                    if (apps.all { (rawMap as? Map<*, *>)?.get(it) == "music" }) return@after
                     val map = unwrapMutableMap(rawMap)
                     runCatching {
-                        hookPrefs.getStringSet(ConfigKeys.MUSIC_CONTROLS_WHITELIST_APPS)
-                            .forEach { app ->
-                                map[app] = "music"
-                            }
+                        apps.forEach { app -> map[app] = "music" }
                     }.onFailure { YLog.error("[$TAG] Cannot update app registry", it) }
                         .getOrThrow()
-                    YLog.debug("Hooked SubscreenCenter whitelist $map")
+                    if (hookPrefs.getBoolean(ConfigKeys.MORE_DEBUG, false))
+                        YLog.debug("Hooked SubscreenCenter whitelist $map")
                 }
             }
 

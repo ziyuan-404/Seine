@@ -300,6 +300,9 @@ class RearWidgetHook : RoxyHooker() {
     private fun releaseForReload(): Boolean {
         RearNotificationCards.post = null
         RearNotificationCards.remove = null
+        RearNotificationCards.postNavigation = null
+        RearNotificationCards.removeNavigation = null
+        RearNotificationCards.reconcileNavigation = null
         RearNotificationCards.reconcile = null
         RearNotificationCards.hasNativeCard = null
         RearNotificationCards.hasMirrorCard = null
@@ -337,6 +340,15 @@ class RearWidgetHook : RoxyHooker() {
             RearWidgetRuntimeStore.install(packageName)
             RearNotificationCards.post = { key, views -> postNotificationMirror(key, views) }
             RearNotificationCards.remove = { key -> removeNotificationMirror(key) }
+            RearNotificationCards.postNavigation = { key, views ->
+                postNotificationMirror(key, views, RearNotificationCards.NAVIGATION_BUSINESS)
+            }
+            RearNotificationCards.removeNavigation = { key ->
+                removeNotificationMirror(key, RearNotificationCards.NAVIGATION_BUSINESS)
+            }
+            RearNotificationCards.reconcileNavigation = { keys ->
+                reconcileNotificationMirrors(keys, RearNotificationCards.NAVIGATION_BUSINESS)
+            }
             RearNotificationCards.reconcile = { keys -> reconcileNotificationMirrors(keys) }
             RearNotificationCards.hasNativeCard = { sourceKey ->
                 runCatching {
@@ -344,6 +356,10 @@ class RearWidgetHook : RoxyHooker() {
                         name = resolveSmartAssistantManagerWidgetListFieldName()
                     }?.get<List<Any>>().orEmpty()
                     records.any { record ->
+                        if (managerWidgetBundle(record)?.let { bundle ->
+                                bundle.getString("business") == RearNotificationCards.NAVIGATION_BUSINESS &&
+                                    bundle.getString("__notification_source_key__") == sourceKey
+                            } == true) return@any true
                         managerWidgetBundle(record)?.getString("business") != RearNotificationCards.BUSINESS &&
                             record.javaClass.declaredFields.filter { it.type == String::class.java }.any { field ->
                                 field.isAccessible = true
@@ -2254,11 +2270,12 @@ class RearWidgetHook : RoxyHooker() {
         }
     }
 
-    private fun PackageScope.postNotificationMirror(sourceKey: String, views: RemoteViews): Boolean {
+    private fun PackageScope.postNotificationMirror(
+        sourceKey: String, views: RemoteViews, business: String = RearNotificationCards.BUSINESS,
+    ): Boolean {
         val ctx = hostContext ?: return false
         if (!presetDataReleased || manager == null || mainHandler == null) return false
         return runCatching {
-            val business = RearNotificationCards.BUSINESS
             // RemoteViews is the rendering path. Supply a valid fallback template for registry
             // bookkeeping, without borrowing or overwriting any native business/template.
             val fallback = File(ctx.filesDir, "reareye/notification-mirror-v1.zip")
@@ -2286,11 +2303,13 @@ class RearWidgetHook : RoxyHooker() {
                 business = business,
                 payload = payload,
                 packageName = NotificationRouteBridgeContract.MODULE_PACKAGE,
-                options = RearWidgetNoticeOptions(disablePopup = true, showTimeTip = true, priority = 300),
+                options = RearWidgetNoticeOptions(disablePopup = true,
+                    showTimeTip = business != RearNotificationCards.NAVIGATION_BUSINESS, priority = 300),
             )
             applyRuntimeMaps(force = false)
             patchManagerAppGates(manager)
             applyNoticeDisplayByCompositeKey(ticket.compositeKey)
+            if (business == RearNotificationCards.NAVIGATION_BUSINESS) normalizeNotificationWidgetOrder(manager)
             val records = manager?.asResolver()?.firstField {
                 name = resolveSmartAssistantManagerWidgetListFieldName()
             }?.get<List<Any>>()
@@ -2303,18 +2322,18 @@ class RearWidgetHook : RoxyHooker() {
             .getOrDefault(false)
     }
 
-    private fun PackageScope.removeNotificationMirror(sourceKey: String) {
+    private fun PackageScope.removeNotificationMirror(sourceKey: String, business: String = RearNotificationCards.BUSINESS) {
         RearWidgetRuntimeStore.disableCardDisplay(
             packageName = NotificationRouteBridgeContract.MODULE_PACKAGE,
-            business = RearNotificationCards.BUSINESS,
+            business = business,
             cardId = RearNotificationCards.CARD_PREFIX + sourceKey,
         )?.let { ejectByTicket(it) }
     }
 
-    private fun PackageScope.reconcileNotificationMirrors(activeKeys: Set<String>) {
+    private fun PackageScope.reconcileNotificationMirrors(activeKeys: Set<String>, business: String = RearNotificationCards.BUSINESS) {
         if (!presetDataReleased) return
         RearWidgetRuntimeStore.listNotices().filter {
-            it.ticket.business == RearNotificationCards.BUSINESS &&
+            it.ticket.business == business &&
                     it.payload.getString("__notification_source_key__") !in activeKeys
         }.forEach { ejectByCompositeKey(it.ticket.compositeKey) }
         // The host may restore cards before our in-memory ticket index is ready. Remove
@@ -2325,7 +2344,7 @@ class RearWidgetHook : RoxyHooker() {
         val stale = synchronized(list) {
             list.mapNotNull { record ->
                 val bundle = record?.let { managerWidgetBundle(it) } ?: return@mapNotNull null
-                if (bundle.getString("business") != RearNotificationCards.BUSINESS) return@mapNotNull null
+                if (bundle.getString("business") != business) return@mapNotNull null
                 if (bundle.getString("__notification_source_key__") in activeKeys) return@mapNotNull null
                 bundle.getString("composite_key")
             }
@@ -3225,15 +3244,14 @@ class RearWidgetHook : RoxyHooker() {
     }
 
     private fun PackageScope.notificationWidgetOrder(): Comparator<Any> {
-        // Store the opposite shade order in the factory pager. The rear panel's
-        // entry/drag direction must be accounted for as well; ascending ranks
-        // produced the forward visual order on the actual device.
+        // The factory opens from the list's end, where the first shade entry belongs.
         val ranks = RearNotificationCards.sourceOrder.withIndex().associate { it.value to -it.index }
         return compareBy<Any> { widget ->
             if (!hookPrefs.getBoolean(ConfigKeys.REAR_NOTIFICATION_SYNC, RearNotificationDefaults.ENABLED)) 0
             else {
                 val bundle = managerWidgetBundle(widget)
                 val source = bundle?.getString("__notification_source_key__")
+                    ?: bundle?.getString("notification_key")
                 ranks[source] ?: widget.javaClass.declaredFields.asSequence()
                     .filter { it.type == String::class.java }
                     .mapNotNull { field ->
@@ -3266,8 +3284,7 @@ class RearWidgetHook : RoxyHooker() {
             }
             val entryNative = list.lastOrNull { isPriorityManagedWidget(it) }
             // Preserve the selected record by identity when a notification arrives.
-            // The entry edge is the list's end: select its last card before
-            // the drawer appears, preserving the rear's reverse traversal.
+            // Place the first shade entry at the factory drawer's entry edge.
             val selected = if (opening && entryNative != null && (current == null || isPriorityManagedWidget(current))) entryNative else current
             currentField.set(selected?.let(list::indexOf) ?: -1)
             val remembered = if (currentIndex < 0 && entryNative != null) entryNative else previous

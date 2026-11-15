@@ -9,6 +9,59 @@ import hk.uwu.reareye.hook.support.YLog
 /** Add the installed OS4 edge stroke without replacing the factory backdrop. */
 internal object NativeRearGlass {
     private var tokenClass: Class<*>? = null
+    private var glassClass: Class<*>? = null
+    private var navigationFailureReported = false
+
+    fun navigation(view: View, dark: Boolean, radius: Float): Boolean = runCatching {
+        val type = glassClass ?: PathClassLoader(
+            view.context.packageManager.getApplicationInfo("miui.systemui.plugin", 0).sourceDir,
+            View::class.java.classLoader).loadClass("miuix.theme.token.GlassToken").also { glassClass = it }
+        val tokenName = if (dark) "Glass_Common_Medium_Regular_Dark" else "Glass_Common_Medium_Regular_High_Light"
+        val token = type.getField(tokenName).get(null)
+        val blur = type.getField("blurRadius").get(token)
+        View::class.java.getMethod("setMiBackgroundBlurMode", Int::class.javaPrimitiveType).invoke(view, 1)
+        View::class.java.getMethod("setMiViewBlurMode", Int::class.javaPrimitiveType).invoke(view, 1)
+        View::class.java.getMethod("setMiBackgroundBlurRadius", Int::class.javaPrimitiveType)
+            .invoke(view, blur.javaClass.getField("smallBlurRadius").getInt(blur))
+        View::class.java.getMethod("setMiViewMaterialType", Int::class.javaPrimitiveType).invoke(view, 1)
+        View::class.java.getMethod("setMiGlassBlurRadius", Int::class.javaPrimitiveType, Int::class.javaPrimitiveType)
+            .invoke(view, blur.javaClass.getField("smallBlurRadius").getInt(blur),
+                blur.javaClass.getField("bigBlurRadius").getInt(blur))
+        val parameters = (type.getMethod("toShaderParams").invoke(token) as FloatArray).clone()
+        // The system token targets a larger container. Fit its edge and optical
+        // thickness to these short panels while retaining the native glass shader.
+        val density = view.resources.displayMetrics.density
+        parameters[19] = minOf(parameters[19], density * .5f)
+        parameters[21] = minOf(parameters[21], density * .75f)
+        parameters[24] *= .25f
+        parameters[28] *= .35f
+        parameters[29] *= .35f
+        View::class.java.getMethod("setMiGlass", FloatArray::class.java).invoke(view, parameters)
+        View::class.java.getMethod("setMiBloomStroke", FloatArray::class.java).invoke(view, FloatArray(0))
+        view.outlineProvider = object : ViewOutlineProvider() {
+            override fun getOutline(target: View, outline: Outline) {
+                outline.setRoundRect(0, 0, target.width, target.height, radius)
+            }
+        }
+        view.clipToOutline = true
+        true
+    }.getOrElse {
+        if (!navigationFailureReported) {
+            navigationFailureReported = true
+            YLog.warn("OS4 navigation glass unavailable", it)
+        }
+        false
+    }
+
+    fun clearNavigation(view: View) {
+        runCatching {
+            View::class.java.getMethod("setMiGlass", FloatArray::class.java).invoke(view, FloatArray(0))
+            View::class.java.getMethod("setMiBloomStroke", FloatArray::class.java).invoke(view, FloatArray(0))
+            View::class.java.getMethod("setMiViewMaterialType", Int::class.javaPrimitiveType).invoke(view, 0)
+            View::class.java.getMethod("setMiBackgroundBlurMode", Int::class.javaPrimitiveType).invoke(view, 0)
+            View::class.java.getMethod("setMiViewBlurMode", Int::class.javaPrimitiveType).invoke(view, 0)
+        }
+    }
     fun begin(page: View): () -> Unit {
         val previousOutline = page.outlineProvider
         val previousClip = page.clipToOutline

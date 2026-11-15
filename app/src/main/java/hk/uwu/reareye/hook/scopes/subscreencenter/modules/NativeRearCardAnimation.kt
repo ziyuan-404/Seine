@@ -10,8 +10,8 @@ import hk.uwu.reareye.hook.support.YLog
 import java.lang.ref.WeakReference
 import java.util.WeakHashMap
 
-/** The ROM animates its own card. Shell only presents the app surface at the
- * native child's matrix, crop, radius and alpha; it supplies no easing/geometry. */
+/** The ROM card owns spring frames and geometry. The bridge carries its current
+ * state across interruptions and passes the factory gesture velocity to Folme. */
 internal class NativeRearCardAnimation(source: View) {
     companion object {
         var panelClass: Class<*>? = null
@@ -21,6 +21,18 @@ internal class NativeRearCardAnimation(source: View) {
         private val byCard = java.util.IdentityHashMap<View, NativeRearCardAnimation>()
         private val byPanel = java.util.IdentityHashMap<Any, NativeRearCardAnimation>()
         val isolatedPanels = java.util.Collections.newSetFromMap(java.util.IdentityHashMap<Any, Boolean>())
+        private var closingSetup: NativeRearCardAnimation? = null
+        private var gestureSpeed = 0f
+        private var gestureTime = 0L
+        private var closeReceipts = 10
+        fun recordHomeVelocity(pixelsPerSecond: Float) {
+            gestureSpeed = pixelsPerSecond.coerceAtLeast(0f)
+            gestureTime = android.os.SystemClock.uptimeMillis()
+        }
+        fun beforeStockCardProgress(card: View) { byCard[card]?.applyClosingStart() }
+        fun configureStockSpring(arguments: Array<*>) {
+            closingSetup?.configureSpring(arguments)
+        }
         fun closeAll() { live.toList().forEach { it.dispose() } }
         fun onStockCardProgress(card: View) { byCard[card]?.emit() }
         fun onStockPanelProgress(panel: Any) { byPanel[panel]?.emit() }
@@ -38,7 +50,9 @@ internal class NativeRearCardAnimation(source: View) {
     private val radius = field("d")
     private val nativeSourceRadius = field("h")
     private val nativeExpandedRadius = field("i")
-    private val nativeProgress = field("k")
+    private val nativeClosing = field("l")
+    private val startClip = field("o").get(card) as RectF
+    private val startRadius = field("q")
     private val expanded = field("y")
     private val animating = panelType.getDeclaredField("p").apply { isAccessible = true }
     private val wrapper = panelType.getDeclaredField("k").apply { isAccessible = true }
@@ -55,6 +69,20 @@ internal class NativeRearCardAnimation(source: View) {
     private var area = Rect()
     private var ready = false
     private var disposed = false
+    private var replacing = false
+    private data class OpeningFrame(val clip: RectF, val radius: Float, val alpha: Float)
+    private var pausedOpening: OpeningFrame? = null
+    private var closingStart: OpeningFrame? = null
+    private var closingAlpha = 1f
+    private var closingSpeed = 0f
+    val isClosing: Boolean get() = !opening && callback != null && !disposed
+    fun pauseOpening() {
+        if (opening && !disposed && callback != null && pausedOpening == null) {
+            pausedOpening = OpeningFrame(RectF(clip), radius.getFloat(card), card.alpha)
+            replacing = true
+            try { clean(card) } finally { replacing = false }
+        }
+    }
     private var last = floatArrayOf()
     private val timeout = Runnable { finish() }
     private val detached = object : View.OnAttachStateChangeListener {
@@ -82,9 +110,25 @@ internal class NativeRearCardAnimation(source: View) {
         check(!disposed)
         val target = requireNotNull(source.get()).also { check(it.isAttachedToWindow) }
         val root = requireNotNull(root.get())
-        if (this.callback != null) finish()
+        val continuation = if (!opening && this.opening && this.callback != null)
+            pausedOpening ?: OpeningFrame(RectF(clip), radius.getFloat(card), card.alpha) else null
+        continuation?.clip?.offset((area.left - bounds.left).toFloat(), (area.top - bounds.top).toFloat())
+        pausedOpening = null
+        if (this.callback != null) {
+            replacing = true
+            try {
+                clean(card)
+                finish(release = false)
+            } finally { replacing = false }
+            ready = continuation != null
+        }
         if (!opening && origin.kind == RearLaunchOrigin.PICKER) preparePicker?.invoke()
         this.opening = opening; area.set(bounds); last = floatArrayOf()
+        closingAlpha = continuation?.alpha ?: 1f
+        closingSpeed = if (android.os.SystemClock.uptimeMillis() - gestureTime < 1000L)
+            (gestureSpeed / bounds.height().coerceAtLeast(1)).coerceIn(0f, 8f) else 0f
+        if (!opening && closeReceipts-- > 0)
+            YLog.info("OEM rear close: interrupted=${continuation != null} speed=$closingSpeed clip=${continuation?.clip}")
         val picker = origin.kind == RearLaunchOrigin.PICKER
         // When rebuilding a card for the return, do not publish the temporary
         // opening frames produced by the native open-and-cancel setup.
@@ -122,24 +166,52 @@ internal class NativeRearCardAnimation(source: View) {
         if (!opening) {
             val nativeWrapper = context.classLoader.loadClass("K0.d").getConstructor(Any::class.java).newInstance(null)
             wrapper.set(panel, nativeWrapper)
-            close.invoke(panel, true)
-            if (origin.kind == RearLaunchOrigin.PICKER) animatePickerList?.invoke(false)
+            closingStart = continuation
+            closingSetup = this
+            try {
+                close.invoke(panel, true)
+                if (origin.kind == RearLaunchOrigin.PICKER) animatePickerList?.invoke(false)
+            } finally { closingSetup = null }
         }
         if (!opening && picker) this.callback = callback
         main.postDelayed(timeout, 3000L)
         emit()
     }
 
+    private fun applyClosingStart() {
+        val frame = closingStart ?: return
+        if (!nativeClosing.getBoolean(card)) return
+        startClip.set(frame.clip)
+        startRadius.setFloat(card, frame.radius)
+        closingStart = null
+    }
+
+    private fun configureSpring(arguments: Array<*>) {
+        if (closingSpeed <= 0f) return
+        val config = arguments.firstOrNull { it?.javaClass?.name == "miuix.animation.base.AnimConfig" } ?: return
+        val strength = (closingSpeed / 8f).coerceIn(0f, 1f)
+        val ease = context.classLoader.loadClass("miuix.animation.FolmeEase")
+            .getMethod("spring", Float::class.javaPrimitiveType, Float::class.javaPrimitiveType)
+            .invoke(null, .78f - .20f * strength, .32f - .06f * strength)
+        config.javaClass.getField("ease").set(config, ease)
+        // The property measures normalized card progress or list scale.
+        val progressProperty = field("z").get(card)
+        val speed = if (arguments.firstOrNull() === progressProperty)
+            closingSpeed.coerceAtMost(4f) else (closingSpeed * .12f).coerceAtMost(.9f)
+        config.javaClass.getMethod("setFromSpeed", Float::class.javaPrimitiveType).invoke(config, speed)
+    }
+
     private fun emit() {
+        if (disposed || replacing) return
         val callback = callback ?: return
         val done = if (opening) !animating.getBoolean(panel) else !expanded.getBoolean(card)
-        val progress = if (done) 1f else nativeProgress.getFloat(card).coerceIn(0f, 1f)
+        val terminal = if (done) 1f else 0f
         val frame = if (!opening && done) floatArrayOf(area.left.toFloat(), area.top.toFloat(), 1f,
             area.left.toFloat(), area.top.toFloat(), area.right.toFloat(), area.bottom.toFloat(),
             0f, 0f, 1f)
         else floatArrayOf(area.left + child.translationX, area.top + child.translationY, child.scaleX,
             area.left + clip.left, area.top + clip.top, area.left + clip.right, area.top + clip.bottom,
-            radius.getFloat(card), card.alpha, progress)
+            radius.getFloat(card), card.alpha * (if (opening) 1f else closingAlpha), terminal)
         if (done || !frame.contentEquals(last)) {
             last = frame
             callback(frame, done)
@@ -147,15 +219,15 @@ internal class NativeRearCardAnimation(source: View) {
         if (done) finish(notify = false)
     }
 
-    private fun finish(notify: Boolean = true) {
+    private fun finish(notify: Boolean = true, release: Boolean = true) {
         main.removeCallbacks(timeout)
         val callback = callback; this.callback = null
         clipping.forEach { (view, value) -> view.clipChildren = value }; clipping.clear()
-        if (notify && callback != null) callback(if (last.isNotEmpty()) last else floatArrayOf(
+        if (notify && callback != null) callback(floatArrayOf(
             area.left.toFloat(), area.top.toFloat(), 1f, area.left.toFloat(), area.top.toFloat(),
             area.right.toFloat(), area.bottom.toFloat(), radius.getFloat(card),
             if (opening) 1f else 0f, 1f), true)
-        if (!opening) dispose()
+        if (!opening && release) dispose()
     }
 
     fun dispose() {

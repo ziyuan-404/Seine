@@ -26,14 +26,16 @@ internal data class RearLaunchOrigin(val kind: Int, val bounds: Rect, val radius
         private const val RESTORE = IBinder.FIRST_CALL_TRANSACTION
         private const val QUERY = RESTORE + 1
         private const val ANIMATE = RESTORE + 2
+        private const val RETURNED_HOME = RESTORE + 3
         private val main = Handler(Looper.getMainLooper())
-        private val ownedSources = java.util.WeakHashMap<View, Any>()
+        private val ownedSources = java.util.WeakHashMap<View, Source>()
         private val bindings = java.util.Collections.synchronizedMap(java.util.WeakHashMap<IBinder, Source>())
         private val redirects = java.util.Collections.synchronizedMap(java.util.WeakHashMap<IBinder, RearLaunchOrigin>())
         fun ownsSource(view: View) = ownedSources.containsKey(view)
 
         fun capture(view: View, kind: Int, onOpeningComplete: (() -> Unit)? = null,
                     preanimated: Boolean = false): RearLaunchOrigin? {
+            ownedSources[view]?.restore()
             val area = Rect()
             if (!view.getGlobalVisibleRect(area) || area.isEmpty) return null
             val outline = Outline().also { view.outlineProvider?.getOutline(view, it) }
@@ -42,12 +44,13 @@ internal data class RearLaunchOrigin(val kind: Int, val bounds: Rect, val radius
             val source = Source(view, origin, onOpeningComplete)
             val channel = object : Binder() {
                 override fun onTransact(code: Int, data: Parcel, reply: Parcel?, flags: Int): Boolean {
-                    if (code !in RESTORE..ANIMATE) return super.onTransact(code, data, reply, flags)
+                    if (code !in RESTORE..RETURNED_HOME) return super.onTransact(code, data, reply, flags)
                     data.enforceInterface(MOTION)
                     val redirect = redirects[this]
                     when (code) {
                         QUERY -> reply?.writeString((redirect ?: origin).descriptor())
                         RESTORE -> if (redirect != null) redirect.sourceAlpha(1f) else source.restore()
+                        RETURNED_HOME -> if (redirect != null) redirect.returnedToHome() else source.returnedToHome()
                         ANIMATE -> {
                             val opening = data.readInt() == 1
                             val full = Rect(data.readInt(), data.readInt(), data.readInt(), data.readInt())
@@ -88,16 +91,26 @@ internal data class RearLaunchOrigin(val kind: Int, val bounds: Rect, val radius
         }
 
         private class Source(view: View, val origin: RearLaunchOrigin, val onOpened: (() -> Unit)?) {
+            private val original = SourceViewState(view)
             val view = WeakReference(view)
             var native: NativeRearCardAnimation? = null
             var opened = false
+            @Volatile private var retired = false
+            private var restored = false
+            private var animationSequence = 0L
+            private var returned = false
+            private val releaseReturned = Runnable {
+                if (returned && !retired && native?.isClosing != true) restore()
+            }
             fun previewOpen(full: Rect, openingRadius: Float, onComplete: () -> Unit) {
+                check(!retired) { "Rear source session ended" }
                 val target = requireNotNull(view.get()) { "Rear source disappeared" }
                 check(target.isAttachedToWindow)
+                val sequence = ++animationSequence
                 ownedSources[target] = this
                 val renderer = native ?: NativeRearCardAnimation(target).also { native = it }
                 renderer.animate(true, full, origin, openingRadius) { _, done ->
-                    if (done && !opened) {
+                    if (!retired && native === renderer && animationSequence == sequence && done && !opened) {
                         opened = true
                         onOpened?.invoke()
                         onComplete()
@@ -105,26 +118,71 @@ internal data class RearLaunchOrigin(val kind: Int, val bounds: Rect, val radius
                 }
             }
             fun restore() {
-                val reset = {
-                    native?.dispose(); native = null
-                    view.get()?.let { if (ownedSources[it] === this) ownedSources.remove(it) }
+                retired = true
+                main.removeCallbacks(releaseReturned)
+                val reset = reset@ {
+                    if (restored) return@reset
+                    restored = true
+                    animationSequence++
+                    val renderer = native
+                    native = null
+                    val target = view.get()
+                    val ownsTarget = target != null && (ownedSources[target] === this || ownedSources[target] == null)
+                    try {
+                        renderer?.dispose()
+                    } finally {
+                        if (ownsTarget) target?.let {
+                            original.restore(it)
+                            if (ownedSources[it] === this) ownedSources.remove(it)
+                        }
+                    }
                 }
                 if (Looper.myLooper() == Looper.getMainLooper()) reset() else main.post { reset() }
             }
+
+            fun returnedToHome() {
+                val settle = {
+                    if (!retired) {
+                        returned = true
+                        if (native?.isClosing != true) {
+                            native?.pauseOpening()
+                            view.get()?.let { target ->
+                                if (ownedSources[target] === this || ownedSources[target] == null) {
+                                    original.restore(target)
+                                    if (ownedSources[target] === this) ownedSources.remove(target)
+                                }
+                            }
+                        }
+                        // Keep the ready renderer for a closing request already
+                        // in flight. Reclaim it if Shell sends no close request.
+                        main.removeCallbacks(releaseReturned)
+                        main.postDelayed(releaseReturned, 3_500L)
+                    }
+                }
+                if (Looper.myLooper() == Looper.getMainLooper()) settle() else main.post { settle() }
+            }
             fun animate(opening: Boolean, full: Rect, callback: IBinder, openingRadius: Float?): Boolean {
+                if (retired) return false
                 val target = view.get()?.takeIf { it.isAttachedToWindow } ?: return false
                 if (NativeRearCardAnimation.panelClass == null || full.isEmpty) return false
                 main.post {
+                    if (retired) return@post
                     runCatching {
+                        returned = false
+                        main.removeCallbacks(releaseReturned)
+                        val sequence = ++animationSequence
                         ownedSources[target] = this
                         val renderer = native ?: NativeRearCardAnimation(target).also { native = it }
-                        renderer.animate(opening, full, origin, openingRadius) { frame, done ->
+                        renderer.animate(opening, full, origin, openingRadius) frame@ { frame, done ->
+                            if (retired || native !== renderer || animationSequence != sequence) {
+                                if (done) send(callback, frame, true)
+                                return@frame
+                            }
                             send(callback, frame, done)
                             if (done) {
                                 if (opening && !opened) { opened = true; onOpened?.invoke() }
                                 if (!opening) {
-                                    if (ownedSources[target] === this) ownedSources.remove(target)
-                                    native = null
+                                    restore()
                                 }
                             }
                         }
@@ -144,6 +202,27 @@ internal data class RearLaunchOrigin(val kind: Int, val bounds: Rect, val radius
                     packet.writeInterfaceToken(FRAME); packet.writeFloatArray(frame); packet.writeInt(if (done) 1 else 0)
                     callback.transact(IBinder.FIRST_CALL_TRANSACTION, packet, null, IBinder.FLAG_ONEWAY)
                 } catch (_: android.os.RemoteException) { restore() } finally { packet.recycle() }
+            }
+        }
+
+        private class SourceViewState(view: View) {
+            private val alpha = view.alpha
+            private val translationX = view.translationX
+            private val translationY = view.translationY
+            private val scaleX = view.scaleX
+            private val scaleY = view.scaleY
+            private val pivotX = view.pivotX
+            private val pivotY = view.pivotY
+
+            fun restore(view: View) {
+                view.alpha = alpha
+                view.translationX = translationX
+                view.translationY = translationY
+                view.scaleX = scaleX
+                view.scaleY = scaleY
+                view.pivotX = pivotX
+                view.pivotY = pivotY
+                view.invalidate()
             }
         }
     }
@@ -169,6 +248,14 @@ internal data class RearLaunchOrigin(val kind: Int, val bounds: Rect, val radius
         try {
             data.writeInterfaceToken(MOTION)
             channel.transact(RESTORE, data, null, IBinder.FLAG_ONEWAY)
+        } catch (_: android.os.RemoteException) { } finally { data.recycle() }
+    }
+    fun returnedToHome() {
+        val channel = motion ?: return
+        val data = Parcel.obtain()
+        try {
+            data.writeInterfaceToken(MOTION)
+            channel.transact(RETURNED_HOME, data, null, IBinder.FLAG_ONEWAY)
         } catch (_: android.os.RemoteException) { } finally { data.recycle() }
     }
     fun animate(opening: Boolean, full: Rect, callback: IBinder, openingRadius: Float?): Boolean {
