@@ -9,6 +9,13 @@ import android.os.Looper
 import android.os.ResultReceiver
 import android.util.Base64
 import android.widget.Toast
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -26,7 +33,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -49,6 +56,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
@@ -58,6 +66,8 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.onLongClick
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
@@ -71,6 +81,10 @@ import hk.uwu.reareye.hook.support.XposedModuleStatus
 import hk.uwu.reareye.ui.components.SeineSupportCard
 import hk.uwu.reareye.ui.components.SeineWordmark
 import hk.uwu.reareye.ui.components.config.ConfigCard
+import hk.uwu.reareye.ui.components.config.ConfigUi
+import hk.uwu.reareye.ui.components.motion.FlowMixCardEntrance
+import hk.uwu.reareye.ui.components.motion.HomeLaunchAnimationState
+import hk.uwu.reareye.ui.components.motion.MaterialExpressiveLoadingIndicator
 import hk.uwu.reareye.ui.config.RearAppDefaults
 import hk.uwu.reareye.ui.config.RearNotificationDefaults
 import hk.uwu.reareye.ui.config.rememberRemotePrefsStatusRevision
@@ -86,12 +100,14 @@ import hk.uwu.reareye.version.SeineProject
 import hk.uwu.reareye.version.SeineRelease
 import kotlinx.collections.immutable.toPersistentList
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import ui.feice.mochi.basic.MochiDropdown
+import ui.feice.mochi.basic.MochiDropdownDefaults
 import ui.feice.mochi.basic.MochiItem
 import ui.feice.mochi.basic.Text
 import ui.feice.mochi.icons.MochiIonicon
@@ -114,6 +130,7 @@ private val HomeComponentPackages = listOf(
 private object UpdateInfoCache {
     val lock = Mutex()
     var latestRelease: SeineRelease? = null
+    var islandShownInSession: Boolean = false
 }
 
 private class ToastHolder {
@@ -254,8 +271,10 @@ fun HomeScreen(
     val prefsManager = remember { context.getPrefsManager() }
     val coroutineScope = rememberCoroutineScope()
     val easterEggToastHolder = remember { ToastHolder() }
-    var latestRelease by remember { mutableStateOf<SeineRelease?>(null) }
+    var latestRelease by remember { mutableStateOf<SeineRelease?>(UpdateInfoCache.latestRelease) }
     var isCheckingUpdate by remember { mutableStateOf(false) }
+    var showUpdateIsland by remember { mutableStateOf(false) }
+    val playLaunchAnimation = remember { !HomeLaunchAnimationState.hasPlayed }
     var hasRootAccess by remember { mutableStateOf<Boolean?>(null) }
     val frameNotice = FrameNoticeCache.value
     var easterEggType by remember {
@@ -275,6 +294,10 @@ fun HomeScreen(
                 themeMode == AppThemeMode.MONET_DARK
     }
 
+    LaunchedEffect(Unit) {
+        HomeLaunchAnimationState.hasPlayed = true
+    }
+
     DisposableEffect(lifecycleOwner) {
         val statusObserver: (ModuleActivationState) -> Unit = { activationState = it }
         val lifecycleObserver = LifecycleEventObserver { _, event ->
@@ -290,11 +313,27 @@ fun HomeScreen(
     }
 
     LaunchedEffect(Unit) {
+        val shouldAnimateIsland = !UpdateInfoCache.islandShownInSession
         isCheckingUpdate = true
+        var islandStartTime = 0L
+        if (shouldAnimateIsland) {
+            UpdateInfoCache.islandShownInSession = true
+            delay(180L)
+            islandStartTime = System.currentTimeMillis()
+            showUpdateIsland = true
+        }
         latestRelease = UpdateInfoCache.lock.withLock {
             UpdateInfoCache.latestRelease ?: SeineProject.latestRelease()?.also {
                 UpdateInfoCache.latestRelease = it
             }
+        }
+        if (shouldAnimateIsland) {
+            val elapsed = System.currentTimeMillis() - islandStartTime
+            val minDisplayMs = 2800L
+            if (elapsed < minDisplayMs) {
+                delay(minDisplayMs - elapsed)
+            }
+            showUpdateIsland = false
         }
         isCheckingUpdate = false
     }
@@ -387,16 +426,12 @@ fun HomeScreen(
                 }
             },
             actions = {
-                MochiDropdown(
-                    behavior = SeineMenuDefaults.Trailing,
+                HomeTopActionIslandButton(
                     expanded = showTopMenu.value,
                     onExpandedChange = { showTopMenu.value = it },
-                    items = quickActions,
-                    menuWidth = 256.dp,
-                    buttonMinWidth = 48.dp,
-                    buttonMinHeight = 48.dp,
-                    buttonPadding = PaddingValues(0.dp),
-                    onItemClick = { index ->
+                    checkingUpdate = showUpdateIsland,
+                    quickActions = quickActions,
+                    onActionClick = { index ->
                         coroutineScope.launch {
                             when (index) {
                                 0 -> forceStopPackageByRoot(
@@ -415,53 +450,63 @@ fun HomeScreen(
                             }
                         }
                     },
-                ) {
-                    MochiIonicon("ellipsis-horizontal", contentDescription = stringResource(R.string.config_tab_more))
-                }
+                )
             },
         ) {
             item(key = "wordmark") {
-                SeineWordmark(
-                    width = 180.dp,
-                    color = MochiTheme.colorScheme.onSurface,
-                    modifier = Modifier.height(wordmarkHeight),
-                )
+                FlowMixCardEntrance(index = 0, playAnimation = playLaunchAnimation) {
+                    SeineWordmark(
+                        width = 180.dp,
+                        color = MochiTheme.colorScheme.onSurface,
+                        modifier = Modifier.height(wordmarkHeight),
+                    )
+                }
             }
             item(key = "status") {
                 val status: @Composable (Modifier) -> Unit = { cardModifier ->
-                    WorkingStatusCard(
+                    FlowMixCardEntrance(
+                        index = 1,
                         modifier = cardModifier,
-                        compact = compactOverview,
-                        statusTitle = statusTitle,
-                        frameworkVersion = framework?.takeIf { isActivated },
-                        activated = isActivated,
-                        easterEggType = easterEggType,
-                        useMonetColors = useMonetStatusColors,
-                        onLongPress = {
-                            val result = EasterEggManager.toggleTodayEasterEggEnabled(context)
-                            if (!result.matchedToday) {
-                                showSingleToast(
-                                    context,
-                                    easterEggToastHolder,
-                                    context.getString(R.string.home_easter_egg_no_today),
-                                )
-                                return@WorkingStatusCard
-                            }
-                            easterEggType = EasterEggManager.getCurrentEasterEggType(context)
-                            val eggName = context.getString(result.type.toTitleRes())
-                            val messageRes = if (result.isEnabled) {
-                                R.string.home_easter_egg_enabled
-                            } else {
-                                R.string.home_easter_egg_disabled
-                            }
-                            showSingleToast(context, easterEggToastHolder, context.getString(messageRes, eggName))
-                        },
-                    )
+                        playAnimation = playLaunchAnimation,
+                    ) {
+                        WorkingStatusCard(
+                            modifier = Modifier.fillMaxSize(),
+                            compact = compactOverview,
+                            statusTitle = statusTitle,
+                            frameworkVersion = framework?.takeIf { isActivated },
+                            activated = isActivated,
+                            easterEggType = easterEggType,
+                            useMonetColors = useMonetStatusColors,
+                            onLongPress = {
+                                val result = EasterEggManager.toggleTodayEasterEggEnabled(context)
+                                if (!result.matchedToday) {
+                                    showSingleToast(
+                                        context,
+                                        easterEggToastHolder,
+                                        context.getString(R.string.home_easter_egg_no_today),
+                                    )
+                                    return@WorkingStatusCard
+                                }
+                                easterEggType = EasterEggManager.getCurrentEasterEggType(context)
+                                val eggName = context.getString(result.type.toTitleRes())
+                                val messageRes = if (result.isEnabled) {
+                                    R.string.home_easter_egg_enabled
+                                } else {
+                                    R.string.home_easter_egg_disabled
+                                }
+                                showSingleToast(context, easterEggToastHolder, context.getString(messageRes, eggName))
+                            },
+                        )
+                    }
                 }
                 val countCards: @Composable (Modifier) -> Unit = { modifier ->
                     Column(modifier, verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        HomeCountTile(counts?.first, stringResource(R.string.seine_home_rear_apps))
-                        HomeCountTile(counts?.second, stringResource(R.string.seine_home_notification_apps))
+                        FlowMixCardEntrance(index = 2, playAnimation = playLaunchAnimation) {
+                            HomeCountTile(counts?.first, stringResource(R.string.seine_home_rear_apps))
+                        }
+                        FlowMixCardEntrance(index = 3, playAnimation = playLaunchAnimation) {
+                            HomeCountTile(counts?.second, stringResource(R.string.seine_home_notification_apps))
+                        }
                     }
                 }
                 if (compactOverview) {
@@ -476,44 +521,226 @@ fun HomeScreen(
                     }
                 }
             }
+            var nextSectionIndex = 4
             frameNotice?.let { notice ->
+                val sectionIndex = nextSectionIndex++
                 item(key = "frame_notice") {
-                    HomeNotice(
-                        title = notice.title,
-                        summary = notice.summary,
-                        icon = "information-circle",
-                    )
+                    FlowMixCardEntrance(index = sectionIndex, playAnimation = playLaunchAnimation) {
+                        HomeNotice(
+                            title = notice.title,
+                            summary = notice.summary,
+                            icon = "information-circle",
+                        )
+                    }
                 }
             }
             if (showRootWarning) {
+                val sectionIndex = nextSectionIndex++
                 item(key = "root_warning") {
-                    HomeNotice(
-                        title = stringResource(R.string.home_root_warning_title),
-                        summary = stringResource(R.string.home_root_warning_desc),
-                        icon = "shield",
-                        isError = true,
-                    )
+                    FlowMixCardEntrance(index = sectionIndex, playAnimation = playLaunchAnimation) {
+                        HomeNotice(
+                            title = stringResource(R.string.home_root_warning_title),
+                            summary = stringResource(R.string.home_root_warning_desc),
+                            icon = "shield",
+                            isError = true,
+                        )
+                    }
                 }
             }
+            val systemInfoIndex = nextSectionIndex++
             item(key = "system_info") {
-                ConfigCard {
-                    MochiListRow(stringResource(R.string.seine_home_system_version), subtitle = systemVersion)
-                    HomeComponentPackages.forEach { (label, _) ->
-                        MochiListRow(stringResource(label), subtitle = componentVersions[label] ?: "—")
+                FlowMixCardEntrance(index = systemInfoIndex, playAnimation = playLaunchAnimation) {
+                    ConfigCard {
+                        MochiListRow(stringResource(R.string.seine_home_system_version), subtitle = systemVersion)
+                        HomeComponentPackages.forEach { (label, _) ->
+                            MochiListRow(stringResource(label), subtitle = componentVersions[label] ?: "—")
+                        }
                     }
                 }
             }
 
-            item(key = "support_seine") { SeineSupportCard(onOpenSponsor) }
+            val supportIndex = nextSectionIndex++
+            item(key = "support_seine") {
+                FlowMixCardEntrance(index = supportIndex, playAnimation = playLaunchAnimation) {
+                    SeineSupportCard(onOpenSponsor)
+                }
+            }
+            val updateIndex = nextSectionIndex
             item(key = "version_update") {
-                UpdateInfoCard(
-                    currentVersion = SeineProject.CURRENT_RELEASE.removePrefix("v"),
-                    latestVersion = latestRelease?.tag,
-                    checking = isCheckingUpdate,
-                    onOpenReleases = {
-                        context.startActivity(Intent(Intent.ACTION_VIEW, SeineProject.RELEASES.toUri()))
+                FlowMixCardEntrance(index = updateIndex, playAnimation = playLaunchAnimation) {
+                    UpdateInfoCard(
+                        currentVersion = SeineProject.CURRENT_RELEASE.removePrefix("v"),
+                        latestVersion = latestRelease?.tag,
+                        checking = isCheckingUpdate,
+                        onOpenReleases = {
+                            context.startActivity(Intent(Intent.ACTION_VIEW, SeineProject.RELEASES.toUri()))
+                        },
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun HomeTopActionIslandButton(
+    expanded: Boolean,
+    onExpandedChange: (Boolean) -> Unit,
+    checkingUpdate: Boolean,
+    quickActions: kotlinx.collections.immutable.ImmutableList<MochiItem>,
+    onActionClick: (Int) -> Unit,
+) {
+    val density = LocalDensity.current
+    val textMeasurer = rememberTextMeasurer()
+    val checkingLabel = stringResource(R.string.home_update_checking_island)
+    val labelStyle = MochiTheme.textStyles.labelLarge.copy(fontWeight = FontWeight.Medium)
+    val targetExpandedWidth = remember(checkingLabel, labelStyle, density) {
+        val textWidthPx = textMeasurer.measure(checkingLabel, style = labelStyle).size.width
+        val textWidthDp = with(density) { textWidthPx.toDp() }
+        (16.dp + 20.dp + 8.dp + textWidthDp + 16.dp).coerceIn(136.dp, 220.dp)
+    }
+
+    // FlowMix status capsule curves:
+    // - width: spring(dampingRatio = 1.0f, stiffness = 400f) (critically damped smooth glide)
+    // - pop pulse: spring(dampingRatio = 0.5f, stiffness = 1500f)
+    // - content alpha: tween(250, FastOutSlowInEasing)
+    val buttonWidth by animateDpAsState(
+        targetValue = if (checkingUpdate) targetExpandedWidth else 48.dp,
+        animationSpec = spring(
+            dampingRatio = 1.0f,
+            stiffness = 400f,
+        ),
+        label = "SuperIslandWidth",
+    )
+    val islandPopScale = remember { Animatable(1f) }
+    LaunchedEffect(checkingUpdate) {
+        if (checkingUpdate) {
+            islandPopScale.snapTo(0.95f)
+            islandPopScale.animateTo(
+                targetValue = 1f,
+                animationSpec = spring(dampingRatio = 0.5f, stiffness = 1500f),
+            )
+        } else {
+            islandPopScale.animateTo(
+                targetValue = 1f,
+                animationSpec = spring(dampingRatio = 0.7f, stiffness = 800f),
+            )
+        }
+    }
+    val islandContentAlpha by animateFloatAsState(
+        targetValue = if (checkingUpdate) 1f else 0f,
+        animationSpec = if (checkingUpdate) {
+            tween(durationMillis = 250, delayMillis = 85, easing = FastOutSlowInEasing)
+        } else {
+            tween(durationMillis = 150, easing = FastOutSlowInEasing)
+        },
+        label = "SuperIslandContentAlpha",
+    )
+    val iconAlpha by animateFloatAsState(
+        targetValue = if (checkingUpdate) 0f else 1f,
+        animationSpec = if (checkingUpdate) {
+            tween(durationMillis = 110, easing = FastOutSlowInEasing)
+        } else {
+            tween(durationMillis = 220, delayMillis = 130, easing = FastOutSlowInEasing)
+        },
+        label = "SuperIslandIconAlpha",
+    )
+
+    val mochiColors = MochiTheme.colorScheme
+    val defaultColors = MochiDropdownDefaults.dropdownColors()
+    val islandContainerTarget = if (checkingUpdate) {
+        mochiColors.primaryContainer
+    } else {
+        defaultColors.buttonColor
+    }
+    val islandContentTarget = if (checkingUpdate) {
+        mochiColors.onPrimaryContainer
+    } else {
+        defaultColors.buttonContentColor
+    }
+    val animatedContainer by animateColorAsState(
+        targetValue = islandContainerTarget,
+        animationSpec = tween(durationMillis = 260, easing = FastOutSlowInEasing),
+        label = "SuperIslandContainerColor",
+    )
+    val animatedContent by animateColorAsState(
+        targetValue = islandContentTarget,
+        animationSpec = tween(durationMillis = 240, easing = FastOutSlowInEasing),
+        label = "SuperIslandContentColor",
+    )
+    val dropdownColors = remember(defaultColors, animatedContainer, animatedContent) {
+        defaultColors.copy(
+            buttonColor = animatedContainer,
+            buttonContentColor = animatedContent,
+        )
+    }
+
+    MochiDropdown(
+        behavior = SeineMenuDefaults.Trailing,
+        expanded = expanded && !checkingUpdate,
+        onExpandedChange = { next ->
+            if (!checkingUpdate) onExpandedChange(next)
+        },
+        modifier = Modifier.graphicsLayer {
+            val s = islandPopScale.value
+            scaleX = s
+            scaleY = s
+        },
+        enabled = true,
+        colors = dropdownColors,
+        items = quickActions,
+        menuWidth = 256.dp,
+        buttonMinWidth = buttonWidth,
+        buttonMinHeight = 48.dp,
+        buttonPadding = PaddingValues(0.dp),
+        onItemClick = onActionClick,
+    ) {
+        Box(
+            modifier = Modifier
+                .width(buttonWidth)
+                .height(48.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (iconAlpha > 0.01f) {
+                Box(
+                    modifier = Modifier.graphicsLayer {
+                        alpha = iconAlpha
+                        val s = 0.7f + 0.3f * iconAlpha
+                        scaleX = s
+                        scaleY = s
                     },
-                )
+                    contentAlignment = Alignment.Center,
+                ) {
+                    MochiIonicon(
+                        "ellipsis-horizontal",
+                        contentDescription = stringResource(R.string.config_tab_more),
+                        tint = animatedContent,
+                    )
+                }
+            }
+            if (islandContentAlpha > 0.01f) {
+                Row(
+                    modifier = Modifier
+                        .padding(horizontal = 14.dp)
+                        .graphicsLayer {
+                            alpha = islandContentAlpha
+                            translationX = 6.dp.toPx() * (1f - islandContentAlpha)
+                        },
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    MaterialExpressiveLoadingIndicator(
+                        color = mochiColors.primary,
+                        modifier = Modifier.size(20.dp),
+                    )
+                    Text(
+                        text = checkingLabel,
+                        style = labelStyle,
+                        color = animatedContent,
+                        maxLines = 1,
+                        overflow = TextOverflow.Clip,
+                    )
+                }
             }
         }
     }
@@ -642,7 +869,7 @@ private fun WorkingStatusCard(
         modifier = modifier
             .heightIn(min = if (compact) 144.dp else 124.dp)
             .featureGuideAnchor("home_status")
-            .clip(MochiRoundedRectangle(16.dp))
+            .clip(ConfigUi.CardShape)
             .background(palette.container)
             .semantics {
                 onLongClick {

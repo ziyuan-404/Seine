@@ -7,6 +7,7 @@ import android.view.View
 import android.widget.Toast
 import android.widget.FrameLayout
 import com.highcapable.kavaref.KavaRef.Companion.resolve
+import hk.uwu.reareye.hook.scopes.subscreencenter.modules.charging.RearChargingHook
 import hk.uwu.reareye.hook.support.HookPrefs
 import hk.uwu.reareye.hook.support.YLog
 import hk.uwu.reareye.hook.support.hookPrefs
@@ -18,11 +19,17 @@ import hk.uwu.roxyhook.HotReloadPolicy
 import hk.uwu.roxyhook.PackageScope
 import hk.uwu.roxyhook.RoxyHooker
 import hk.uwu.roxyhook.android.lifecycle.lifecycle
+import java.lang.ref.WeakReference
+import java.util.WeakHashMap
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 
 /** Preserve the OEM unlocked-device exemption; never substitute face detection. */
 internal object RearAppFaceAuth {
     var authenticate: ((View, Boolean, () -> Unit) -> Unit)? = null
+    var requestNotification: ((View, String, Boolean) -> Boolean)? = null
+    var cancelForCharging: (() -> Boolean)? = null
 
     fun authorize(view: View, prefs: HookPrefs, launch: () -> Unit) {
         if (!prefs.isRemoteReady()) {
@@ -61,11 +68,17 @@ class RearAppFaceAuthHook : RoxyHooker() {
             var ownsGate = false
             var gate: AtomicBoolean? = null
             var applicationSession = false
-            var notificationAnchor: java.lang.ref.WeakReference<View>? = null
-            val generations = java.util.WeakHashMap<Any, Long>()
+            var notificationAnchor: WeakReference<View>? = null
+            var notificationOverlay: WeakReference<FrameLayout>? = null
+            var startingHelper: Any? = null
+            var notificationWake = -1L
+            val attemptedSources = mutableSetOf<String>()
+            val overlays = WeakHashMap<FrameLayout, Boolean>()
+            val generations = WeakHashMap<Any, Long>()
+            val closed = AtomicBoolean()
             lifecycle { onAttach(replay = true) {
                 val ctx = hookAppContext ?: this.context
-                main.post { RearFaceSession.attach(ctx) }
+                main.post { if (active) RearFaceSession.attach(ctx) }
             } }
             fun releaseGate() {
                 if (ownsGate) gate?.set(false)
@@ -73,34 +86,43 @@ class RearAppFaceAuthHook : RoxyHooker() {
             }
             runCatching {
                 val overlay = "com.xiaomi.trustservice.face.FaceAuthOverlayView".toClass().resolve()
-                listOf("onFinishInflate", "onAttachedToWindow").forEach { method ->
-                    overlay.firstMethod { name = method; parameterCount = 0 }.hook {
-                        after {
-                            if (!applicationSession) (instance as? FrameLayout)?.let {
-                                RearFaceFeedback.clearNotificationBlur(it, passTouches = true)
-                            }
-                        }
+                overlay.firstMethod { name = "onFinishInflate"; parameterCount = 0 }.hook {
+                    hotReloadPolicy = HotReloadPolicy.REINSTALL
+                    after {
+                        val view = instance as? FrameLayout ?: return@after
+                        val current = startingHelper ?: return@after
+                        val application = current === helper && applicationSession
+                        overlays[view] = application
+                        if (!application) notificationOverlay = WeakReference(view)
+                    }
+                }
+                overlay.firstMethod { name = "onAttachedToWindow"; parameterCount = 0 }.hook {
+                    hotReloadPolicy = HotReloadPolicy.REINSTALL
+                    after {
+                        val view = instance as? FrameLayout ?: return@after
+                        if (overlays[view] == false) RearFaceFeedback.clearNotificationBlur(view)
                     }
                 }
                 listOf("c", "d", "e", "f").forEach { method ->
                     overlay.firstMethod { name = method; parameterCount = if (method == "d") 1 else 0 }.hook {
+                        hotReloadPolicy = HotReloadPolicy.REINSTALL
                         after {
-                            if (!applicationSession) (instance as? FrameLayout)?.let {
-                                RearFaceFeedback.clearNotificationBlur(it, passTouches = method == "c" || method == "f")
-                            }
-                            // The ROM also initiates face sessions itself. The
-                            // visual preference applies to those native sessions too.
-                            val styleKey = if (applicationSession) ConfigKeys.REAR_APP_FACE_AUTH_STYLE
+                            val view = instance as? FrameLayout ?: return@after
+                            val application = overlays[view] ?: return@after
+                            val anchor = notificationAnchor?.get()?.takeIf { it.isAttachedToWindow && it.isShown }
+                            val styleKey = if (application) ConfigKeys.REAR_APP_FACE_AUTH_STYLE
                             else ConfigKeys.REAR_NOTIFICATION_FACE_AUTH_STYLE
-                            val defaultStyle = if (applicationSession) RearAppDefaults.FACE_ANIMATION
+                            val defaultStyle = if (application) RearAppDefaults.FACE_ANIMATION
                             else RearNotificationDefaults.FACE_ANIMATION
                             val savedStyle = hookPrefs.getInt(
                                 styleKey, hookPrefs.getInt(ConfigKeys.REAR_FACE_AUTH_STYLE, defaultStyle),
                             )
-                            if (savedStyle == 1) (instance as? FrameLayout)?.let {
-                                RearFaceFeedback.update(it, scanning = method == "c", success = method == "f",
-                                    application = applicationSession, notificationAnchor = notificationAnchor)
-                            }
+                            val custom = savedStyle == 1 && (application || anchor != null)
+                            if (!application) RearFaceFeedback.clearNotificationBlur(
+                                view, passTouches = custom || method == "c" || method == "f",
+                            )
+                            if (custom) RearFaceFeedback.update(view, scanning = method == "c", success = method == "f",
+                                application = application, notificationAnchor = anchor)
                         }
                     }
                 }
@@ -115,7 +137,7 @@ class RearAppFaceAuthHook : RoxyHooker() {
                         val target = args(0).value as? FrameLayout ?: return@before
                         if (target.javaClass.name != "com.xiaomi.trustservice.face.FaceAuthOverlayView") return@before
                         val manager = instance ?: return@before
-                        val deferred = runCatching { RearFaceFeedback.deferRemoval(target) {
+                        val deferred = runCatching { RearFaceFeedback.deferRemoval(target, RearChargingHook.blocksFaceAuth) {
                             runCatching { manager.javaClass.getMethod("removeView", View::class.java, Boolean::class.javaPrimitiveType)
                                 .invoke(manager, target, true) }.onFailure { YLog.warn("Face visual tail removal failed", it) }
                         } }.onFailure { YLog.warn("Face visual tail unavailable", it) }.getOrDefault(false)
@@ -160,9 +182,11 @@ class RearAppFaceAuthHook : RoxyHooker() {
                         if (RearFaceSession.isAuthorized()) main.post { if (active) runCatching { revealNative(view) } }
                     }
                 }
-                nativeGate.resolve().firstMethod { name = "c"; parameters(String::class.java) }.hook {
+                "com.xiaomi.subscreencenter.SubScreenCenterApp".toClass().resolve().firstMethod {
+                    name = "c"; parameters(Boolean::class.javaPrimitiveType!!)
+                }.hook {
                     hotReloadPolicy = HotReloadPolicy.REINSTALL
-                    after { if (active) RearFaceSession.reset() }
+                    after { if (active) RearFaceSession.setAod(args(0).value == true) }
                 }
                 val callbackClass = "q2.g".toClass()
                 val nativeCallbacks = helperClass.declaredFields.filter { it.type == callbackClass }
@@ -174,19 +198,39 @@ class RearAppFaceAuthHook : RoxyHooker() {
                 val starter = "U1.a0".toClass().getConstructor(
                     Any::class.java, Any::class.java, Any::class.java, Int::class.javaPrimitiveType,
                 )
+                val starterKind = starter.declaringClass.getDeclaredField("a").apply { isAccessible = true }
+                val starterHelper = starter.declaringClass.getDeclaredField("c").apply { isAccessible = true }
+                val starterSuccess = starter.declaringClass.getDeclaredField("b").apply { isAccessible = true }
+                val starterFinished = starter.declaringClass.getDeclaredField("d").apply { isAccessible = true }
                 starter.declaringClass.resolve().firstMethod { name = "run"; parameterCount = 0 }.hook {
+                    hotReloadPolicy = HotReloadPolicy.REINSTALL
                     before {
-                        if (!RearFaceSession.isAuthorized()) return@before
                         val task = instance ?: return@before
-                        fun field(name: String) = task.javaClass.getDeclaredField(name).apply { isAccessible = true }.get(task)
-                        if (field("a") != 14 || !helperClass.isInstance(field("c"))) return@before
-                        val succeeded = field("b") as? Runnable ?: return@before
-                        val finished = field("d") as? Runnable ?: return@before
+                        if (!active || starterKind.getInt(task) != 14) return@before
+                        val current = starterHelper.get(task)
+                        if (!helperClass.isInstance(current)) return@before
+                        if (RearChargingHook.blocksFaceAuth) {
+                            result = null
+                            // The factory acquired its gate before posting this runnable.
+                            (starterFinished.get(task) as? Runnable)?.run()
+                            return@before
+                        }
+                        if (!RearFaceSession.isAuthorized()) {
+                            startingHelper = current
+                            return@before
+                        }
+                        val succeeded = starterSuccess.get(task) as? Runnable ?: return@before
+                        val finished = starterFinished.get(task) as? Runnable ?: return@before
                         result = null
-                        try { succeeded.run() } finally { finished.run(); gate?.set(false) }
+                        try { succeeded.run() } finally { finished.run() }
+                    }
+                    after {
+                        val task = instance ?: return@after
+                        if (starterKind.getInt(task) == 14 && starterHelper.get(task) === startingHelper) startingHelper = null
                     }
                 }
                 terminate = helperClass.getMethod("g", String::class.java, Boolean::class.javaPrimitiveType)
+                val pendingNativeAccept = WeakHashMap<Any, Long>()
                 helperClass.resolve().firstMethod {
                     name = "g"; parameters(String::class.java, Boolean::class.javaPrimitiveType!!)
                 }.hook {
@@ -197,19 +241,27 @@ class RearAppFaceAuthHook : RoxyHooker() {
                             val generation = generations.remove(current)
                             if (args(0).value == "success" && generation != null) {
                                 if (current === helper && applicationSession) RearFaceSession.accept(generation)
-                                else main.post {
-                                    // g() removes the OEM window and registers its visual tail.
-                                    // Keep the privacy label mounted until that tail completes.
-                                    if (active) RearFaceFeedback.afterVisualExit {
-                                        if (active) RearFaceSession.accept(generation)
-                                    }
-                                }
+                                else if (current !== helper) pendingNativeAccept[current] = generation
                             }
+                        }
+                    }
+                    after {
+                        val current = instance ?: return@after
+                        val generation = pendingNativeAccept.remove(current) ?: return@after
+                        if (active) RearFaceFeedback.afterVisualExit {
+                            if (active && !RearChargingHook.blocksFaceAuth) RearFaceSession.accept(generation)
                         }
                     }
                 }
                 helperClass.resolve().firstMethod { name = "f"; parameterCount = 0 }.hook {
-                    before { instance?.let { generations.putIfAbsent(it, RearFaceSession.generation) } }
+                    hotReloadPolicy = HotReloadPolicy.REINSTALL
+                    before {
+                        val current = instance ?: return@before
+                        if (RearChargingHook.blocksFaceAuth) {
+                            result = null
+                            terminate?.invoke(current, "rear_charging", true)
+                        } else generations.putIfAbsent(current, RearFaceSession.generation)
+                    }
                 }
                 callbackClass.resolve().firstMethod { name = "run"; parameterCount = 0 }.hook {
                     hotReloadPolicy = HotReloadPolicy.REINSTALL
@@ -220,16 +272,17 @@ class RearAppFaceAuthHook : RoxyHooker() {
                     }
                 }
                 val authenticate: (View, Boolean, () -> Unit) -> Unit = authenticate@ { view, application, launch ->
+                    if (RearChargingHook.blocksFaceAuth) return@authenticate
                     if (RearFaceSession.isAuthorized()) { launch(); return@authenticate }
-                    if (!active || helper != null) return@authenticate
+                    if (!active || helper != null || !RearFaceSession.isAwake()) return@authenticate
                     if (view.display?.displayId != 1 || !view.isAttachedToWindow) return@authenticate
-                    if (gate?.compareAndSet(false, true) != true) {
-                        Toast.makeText(view.context, "人脸验证正在进行，请稍后重试", Toast.LENGTH_SHORT).show()
+                    if (!gate.compareAndSet(false, true)) {
+                        if (application) Toast.makeText(view.context, "人脸验证正在进行，请稍后重试", Toast.LENGTH_SHORT).show()
                         return@authenticate
                     }
                     ownsGate = true
                     applicationSession = application
-                    notificationAnchor = if (application) null else java.lang.ref.WeakReference(view)
+                    if (!application) notificationAnchor = WeakReference(view)
                     success = false; acceptSuccess = false
                     val generation = RearFaceSession.generation
                     runCatching {
@@ -243,46 +296,107 @@ class RearAppFaceAuthHook : RoxyHooker() {
                             val authorized = success && acceptSuccess && generation == RearFaceSession.generation
                             helper = null
                             applicationSession = false
-                            notificationAnchor = null
                             callbacks.clear()
                             releaseGate()
                             // The native helper has removed the overlay and released the camera.
                             // A screen-off, Back, Home, timeout, or hot reload cannot launch later.
                             val reveal = {
-                                if (active && generation == RearFaceSession.generation && view.isAttachedToWindow && view.display?.state == Display.STATE_ON) launch()
+                                if (active && generation == RearFaceSession.generation && RearFaceSession.isAuthorized() && view.isAttachedToWindow) launch()
                             }
                             if (authorized) {
-                                if (application) reveal() else RearFaceFeedback.afterVisualExit(reveal)
+                                if (application) reveal() else RearFaceFeedback.afterVisualExit {
+                                    // g() has already removed the OEM window and registered any
+                                    // visual tail. Accept the session before running reveal().
+                                    if (active && !RearChargingHook.blocksFaceAuth) RearFaceSession.accept(generation)
+                                    reveal()
+                                }
                             }
                         }
                         (starter.newInstance(current, succeeded, finished, 14) as Runnable).run()
                     }.onFailure {
+                        if (startingHelper === helper) startingHelper = null
                         helper?.let { current -> runCatching { terminate?.invoke(current, "module_error", true) } }
                         helper = null; callbacks.clear()
                         applicationSession = false
                         notificationAnchor = null
                         releaseGate()
                         YLog.warn("Native rear face authentication failed", it)
-                        Toast.makeText(view.context, "人脸验证启动失败，未打开应用", Toast.LENGTH_LONG).show()
+                        if (application) Toast.makeText(view.context, "人脸验证启动失败，未打开应用", Toast.LENGTH_LONG).show()
                     }
                 }
                 RearAppFaceAuth.authenticate = authenticate
+                val requestNotification: (View, String, Boolean) -> Boolean = request@ { view, source, manual ->
+                    if (!active || RearChargingHook.blocksFaceAuth || !RearFaceSession.isAwake() ||
+                        RearFaceSession.isAuthorized()) return@request false
+                    if (notificationWake != RearFaceSession.generation) {
+                        notificationWake = RearFaceSession.generation
+                        attemptedSources.clear()
+                    }
+                    if (notificationAnchor?.get() !== view) notificationAnchor = WeakReference(view)
+                    val visibleOverlay = notificationOverlay?.get()?.takeIf { it.isAttachedToWindow }
+                    if (visibleOverlay != null) {
+                        if (RearFaceFeedback.isRetiring(visibleOverlay)) {
+                            if (!manual) view.postInvalidateDelayed(200L)
+                            return@request false
+                        }
+                        val isNewSource = attemptedSources.add(source)
+                        RearFaceFeedback.moveNotificationAnchor(visibleOverlay, view)
+                        if (manual || isNewSource) RearFaceFeedback.retryNotification(visibleOverlay)
+                        return@request true
+                    }
+                    if (!manual && source in attemptedSources) return@request true
+                    if (helper != null || gate.get()) return@request false
+                    // Reserve before starting so a rebind during startup cannot
+                    // reopen the same card on failure. A new selected card can
+                    // request one scan if the previous overlay has timed out.
+                    attemptedSources.add(source)
+                    authenticate(view, false) {}
+                    true
+                }
+                RearAppFaceAuth.requestNotification = requestNotification
+                val cancelForCharging: () -> Boolean = {
+                    val hasExitingRing = RearFaceFeedback.prepareChargingExit()
+                    val running = generations.keys.toList() + listOfNotNull(helper)
+                    running.distinct().forEach { current ->
+                        runCatching { terminate?.invoke(current, "rear_charging", true) }
+                            .onFailure { YLog.warn("Could not close rear face authentication for charging", it) }
+                    }
+                    running.isNotEmpty() || hasExitingRing
+                }
+                RearAppFaceAuth.cancelForCharging = cancelForCharging
                 val close: () -> Unit = {
-                    active = false
-                    if (RearFaceSession.onNativeAuthorizationChanged === synchronizeNative)
-                        RearFaceSession.onNativeAuthorizationChanged = null
-                    nativeViews.clear()
-                    if (RearAppFaceAuth.authenticate === authenticate) RearAppFaceAuth.authenticate = null
-                    // Detach module-owned callbacks before Roxy removes their hooks.
-                    // Native teardown may finish asynchronously after this generation closes.
-                    val current = helper
-                    current?.let { value -> nativeCallbacks.forEach { it.set(value, null) } }
-                    main.post {
-                        RearFaceFeedback.finishPendingImmediately()
-                        RearFaceSession.close()
-                        current?.let { runCatching { terminate?.invoke(it, "module_closed", true) } }
-                        helper = null; callbacks.clear()
-                        releaseGate()
+                    if (closed.compareAndSet(false, true)) {
+                        val done = CountDownLatch(1)
+                        val cleanup = Runnable {
+                            try {
+                                active = false
+                                if (RearAppFaceAuth.authenticate === authenticate) RearAppFaceAuth.authenticate = null
+                                if (RearAppFaceAuth.requestNotification === requestNotification)
+                                    RearAppFaceAuth.requestNotification = null
+                                if (RearAppFaceAuth.cancelForCharging === cancelForCharging)
+                                    RearAppFaceAuth.cancelForCharging = null
+                                val current = helper
+                                current?.let { value -> nativeCallbacks.forEach { it.set(value, null) } }
+                                RearFaceFeedback.finishPendingImmediately()
+                                val running = generations.keys.toList() + listOfNotNull(current)
+                                running.distinct().forEach { runCatching { terminate?.invoke(it, "module_closed", true) } }
+                                RearFaceSession.close()
+                            } finally {
+                                helper = null
+                                callbacks.clear()
+                                nativeViews.clear()
+                                overlays.clear()
+                                generations.clear()
+                                pendingNativeAccept.clear()
+                                releaseGate()
+                                done.countDown()
+                            }
+                        }
+                        if (Looper.myLooper() == Looper.getMainLooper()) cleanup.run()
+                        else {
+                            main.post(cleanup)
+                            check(done.await(3, TimeUnit.SECONDS)) { "Rear face cleanup timed out" }
+                        }
                     }
                 }
                 closeSession = close

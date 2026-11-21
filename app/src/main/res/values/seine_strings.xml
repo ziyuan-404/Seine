@@ -51,6 +51,7 @@
     <string name="seine_home_assistant_version">Assistant version</string>
     <string name="seine_home_themes_version">Themes &amp; wallpapers version</string>
     <string name="seine_home_active">Activated</string>
+    <string name="home_update_checking_island">Checking for updates</string>
     <string name="seine_setting_save_failed">Could not save this setting</string>
     <string name="module_mochi_graphics_level">Mochi graphics quality</string>
     <string name="module_mochi_graphics_level_desc">Adjust effects and blur strength</string>

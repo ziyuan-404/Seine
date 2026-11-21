@@ -43,6 +43,13 @@ internal object RearNotificationGestures {
 
     fun cancelTap() { pendingTap?.let(main::removeCallbacks); pendingTap = null }
 
+    fun cancelGesture() {
+        cancelTap()
+        suppressNativeDoubleTap = false
+        velocity?.recycle(); velocity = null
+        current = null; target = null; surface = null; axis = 0
+    }
+
     fun singleTap(view: View, action: () -> Unit) {
         cancelTap()
         if (doubleTap || axis != 0) return

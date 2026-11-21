@@ -141,7 +141,8 @@ class SystemUiNotificationBridgeHook : RoxyHooker() {
                 // Rebind from the restored attach event after the old generation unbinds.
                 onAttach(replay = true) {
                     val context = hookAppContext ?: this.context
-                    hostContext = context.applicationContext ?: context
+                    val receiverContext = context.applicationContext ?: context
+                    hostContext = receiverContext
                     chargingStatus = System.getProperties()[CHARGE_SNAPSHOT] as? android.content.Intent
                     if (decimalReceiver == null) {
                         decimalReceiver = object : android.content.BroadcastReceiver() {
@@ -162,7 +163,7 @@ class SystemUiNotificationBridgeHook : RoxyHooker() {
                             // Match MiuiChargeController's original receiver. This
                             // vendor broadcast is not sticky; retain its timestamp
                             // for a rear launcher which attaches after it was sent.
-                            context.registerReceiver(receiver, android.content.IntentFilter("miui.intent.action.ACTION_SOC_DECIMAL"),
+                            receiverContext.registerReceiver(receiver, android.content.IntentFilter("miui.intent.action.ACTION_SOC_DECIMAL"),
                                 null, main, Context.RECEIVER_EXPORTED)
                         }
                     }
@@ -170,7 +171,7 @@ class SystemUiNotificationBridgeHook : RoxyHooker() {
                         chargeRequestReceiver = object : android.content.BroadcastReceiver() {
                             override fun onReceive(context: Context, intent: android.content.Intent) { main.post(dispatchCharging) }
                         }.also { receiver ->
-                            context.registerReceiver(receiver, android.content.IntentFilter("hk.uwu.reareye.REAR_CHARGING_STATUS_REQUEST"),
+                            receiverContext.registerReceiver(receiver, android.content.IntentFilter("hk.uwu.reareye.REAR_CHARGING_STATUS_REQUEST"),
                                 "android.permission.DEVICE_POWER", main, Context.RECEIVER_EXPORTED)
                         }
                     }

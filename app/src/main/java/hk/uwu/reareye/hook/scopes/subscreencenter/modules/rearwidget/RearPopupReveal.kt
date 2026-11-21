@@ -75,7 +75,15 @@ internal object RearPopupReveal {
     fun bind(host: ViewGroup, sbn: StatusBarNotification, hidden: Boolean, appName: String, entry: Any?,
              footer: View? = null, quickOpen: TextView? = null) {
         val source = RearMessageEntryMotion.version(sbn)
-        if (entry == null && bindings[host] == Binding(source, hidden)) return
+        if (entry == null && bindings[host] == Binding(source, hidden)) {
+            val container = host.findViewById<LinearLayout>(id(host, "notification_container"))
+            if (container != null) {
+                val maxBodyLines = if (hidden || (!hidden && usesDownloadLayout(sbn))) 1 else 2
+                (footer?.parent as? View ?: host).doOnLayout { positionCard(host, container, footer, maxBodyLines) }
+                host.doOnPreDraw { positionCard(host, container, footer, maxBodyLines) }
+            }
+            return
+        }
         running.remove(host)?.invoke()
         val reveal = bindings[host] == Binding(source, true) && !hidden && host.isShown &&
             host.isAttachedToWindow && (entry != null || NativeRearCardHost.isSelected(host)) &&
@@ -145,15 +153,28 @@ internal object RearPopupReveal {
         val title = sbn.notification.extras.getCharSequence(Notification.EXTRA_TITLE)
         val text = sbn.notification.extras.getCharSequence(Notification.EXTRA_BIG_TEXT)
             ?: sbn.notification.extras.getCharSequence(Notification.EXTRA_TEXT) ?: ""
-        body.text = if (hidden) NativeNotificationPrivacy.placeholder(host.context) else
-            if (download) title?.takeUnless { it.isBlank() } ?: appName else text
-        sender.text = if (hidden) appName else if (download) text else title?.takeUnless { it.isBlank() } ?: appName
+        val fallbackTitle = title?.takeUnless { it.isBlank() } ?: appName
+        body.text = when {
+            hidden -> NativeNotificationPrivacy.placeholder(host.context)
+            download -> fallbackTitle
+            text.isNotBlank() -> text
+            else -> fallbackTitle
+        }
+        sender.text = when {
+            hidden -> appName
+            download -> text
+            text.isNotBlank() -> fallbackTitle
+            else -> appName
+        }
         prepare(host, container, frame, icon, badge, body, sender, hidden, hasAvatar)
         val maxBodyLines = if (hidden || download) 1 else 2
         body.maxLines = maxBodyLines
         if (entry != null) {
-            quickOpen?.let(container::addView)
-            if (!hidden) {
+            attachQuickOpen(host, quickOpen)
+            if (quickOpen != null) {
+                host.doOnLayout { positionCard(host, container, quickOpen, maxBodyLines) }
+                host.doOnPreDraw { positionCard(host, container, quickOpen, maxBodyLines) }
+            } else if (!hidden) {
                 container.layoutParams = (container.layoutParams as RelativeLayout.LayoutParams).apply {
                     removeRule(RelativeLayout.ALIGN_PARENT_TOP)
                     addRule(RelativeLayout.CENTER_VERTICAL)
@@ -300,22 +321,67 @@ internal object RearPopupReveal {
         if (host.height <= 0 || container.height <= 0 ||
             footer?.visibility == View.VISIBLE && (footer.height <= 0 || footer.bottom <= 0)) return
         val density = host.resources.displayMetrics.density
-        // Keep the factory clock and footer slots. Center the actual measured
-        // content between them; action rows never cover the icon or labels.
-        val top = (32f * density).roundToInt()
+        val tallFooter = footer?.visibility == View.VISIBLE && footer.height >= (64f * density).roundToInt()
+        // Keep the factory clock and footer slots across both 17 Pro (572px) and
+        // 17 Pro Max (596px). Center the actual measured content between them.
+        val top = if (tallFooter) minOf(22f * density, host.height * .11f).roundToInt()
+            else minOf(32f * density, host.height * .14f).roundToInt()
         val bottom = if (footer?.visibility == View.VISIBLE && footer.height > 0)
-            minOf(host.height - 12f * density, footer.y - 8f * density)
-        else host.height - 16f * density
+            minOf(host.height - NativeGroupToggle.BOTTOM_MARGIN_DP * density, footer.y - (if (tallFooter) 4f else 6f) * density)
+        else host.height - 14f * density
+        val available = (bottom - top).coerceAtLeast(1f)
         val body = host.findViewById<TextView>(id(host, "notification_content")) ?: return
-        val bodySpace = bottom - top - (container.height - body.height)
-        val lines = (bodySpace / body.lineHeight.coerceAtLeast(1)).toInt().coerceIn(1, maxBodyLines)
-        if (body.maxLines != lines) {
-            body.maxLines = lines
-            // Apply the same measured bounds to this frame and the next parent
-            // layout, before the reveal animation samples its final geometry.
+        val sender = host.findViewById<TextView>(id(host, "notification_title"))
+        fun remeasureContainer() {
             container.measure(View.MeasureSpec.makeMeasureSpec(container.width, View.MeasureSpec.EXACTLY),
                 View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED))
             container.layout(container.left, container.top, container.right, container.top + container.measuredHeight)
+        }
+        val bodySpace = available - (container.height - body.height)
+        val lines = (bodySpace / body.lineHeight.coerceAtLeast(1)).toInt().coerceIn(1, maxBodyLines)
+        if (body.maxLines != lines) {
+            body.maxLines = lines
+            remeasureContainer()
+        }
+        val overflow = container.height - available
+        if (overflow > 1f) {
+            val icon = host.findViewById<ImageView>(id(host, "notification_icon"))
+            val badge = host.findViewById<ImageView>(id(host, "notification_small_icon"))
+            val frame = icon?.parent as? FrameLayout
+            if (icon != null && frame != null) {
+                val oldIcon = icon.layoutParams.height.coerceAtLeast(1)
+                val minIcon = (36f * density).roundToInt()
+                val nextIcon = (oldIcon - overflow.roundToInt()).coerceAtLeast(minIcon)
+                if (nextIcon < oldIcon) {
+                    val ratio = nextIcon.toFloat() / oldIcon
+                    icon.layoutParams = (icon.layoutParams as FrameLayout.LayoutParams).apply {
+                        width = nextIcon; height = nextIcon
+                    }
+                    if (badge != null && badge.visibility == View.VISIBLE) {
+                        val badgeSize = (24.5f * density * ratio).roundToInt().coerceAtLeast((14f * density).roundToInt())
+                        val badgeOffset = (nextIcon - badgeSize + (2f * density).roundToInt()).coerceAtLeast(0)
+                        badge.layoutParams = (badge.layoutParams as FrameLayout.LayoutParams).apply {
+                            width = badgeSize; height = badgeSize
+                            marginStart = badgeOffset; topMargin = badgeOffset
+                        }
+                    }
+                    frame.layoutParams = (frame.layoutParams as LinearLayout.LayoutParams).apply {
+                        height = if (badge?.visibility == View.VISIBLE) nextIcon + (2f * density).roundToInt() else nextIcon
+                    }
+                    remeasureContainer()
+                }
+            }
+        }
+        if (container.height - available > 1f) {
+            body.setTextSize(TypedValue.COMPLEX_UNIT_PX, 17f * density)
+            body.setLineHeight((21f * density).roundToInt())
+            (body.layoutParams as? LinearLayout.LayoutParams)?.topMargin = (2f * density).roundToInt()
+            sender?.apply {
+                setTextSize(TypedValue.COMPLEX_UNIT_PX, 12f * density)
+                setLineHeight((16f * density).roundToInt())
+                (layoutParams as? LinearLayout.LayoutParams)?.topMargin = (2f * density).roundToInt()
+            }
+            remeasureContainer()
         }
         val target = (top + (bottom - top - container.height) / 2f).roundToInt().coerceAtLeast(top)
         val params = container.layoutParams as RelativeLayout.LayoutParams
@@ -331,6 +397,26 @@ internal object RearPopupReveal {
         view.draw(Canvas(bitmap))
         val b = bounds(host, view)
         return ImageView(host.context).apply { setImageBitmap(bitmap); layout(b.left, b.top, b.right, b.bottom) }
+    }
+
+    fun attachQuickOpen(host: ViewGroup, quickOpen: TextView?) {
+        removeQuickOpen(host)
+        if (quickOpen == null) return
+        val density = host.resources.displayMetrics.density
+        val cameraWidth = host.findViewById<View>(id(host, "camera_place_holder"))?.layoutParams?.width
+            ?.takeIf { it >= 0 } ?: (host.display?.cutout?.safeInsetLeft ?: 0)
+        val marginId = host.resources.getIdentifier("notification_container_margin_horizontal", "dimen", "com.xiaomi.subscreencenter")
+        val margin = if (marginId != 0) host.resources.getDimensionPixelSize(marginId) else 0
+        quickOpen.layoutParams = FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            (NativeGroupToggle.HEIGHT_DP * density).toInt(),
+            Gravity.BOTTOM,
+        ).apply {
+            leftMargin = cameraWidth + margin
+            rightMargin = margin
+            bottomMargin = (NativeGroupToggle.BOTTOM_MARGIN_DP * density).toInt()
+        }
+        host.addView(quickOpen)
     }
 
     fun removeQuickOpen(host: ViewGroup) {

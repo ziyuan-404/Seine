@@ -19,6 +19,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -26,6 +29,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
 import hk.uwu.reareye.R
+import hk.uwu.reareye.ui.components.motion.LocalSponsorHeroState
+import hk.uwu.reareye.ui.components.motion.SPONSOR_NAV_SOURCE_KEY
 import hk.uwu.reareye.version.SeineProject
 import ui.feice.mochi.basic.MochiButton
 import ui.feice.mochi.basic.MochiButtonDefaults
@@ -33,6 +38,7 @@ import ui.feice.mochi.basic.MochiButtonStyle
 import ui.feice.mochi.basic.Text
 import ui.feice.mochi.list.MochiListCard
 import ui.feice.mochi.list.MochiListDefaults
+import ui.feice.mochi.navigation.mochiNavSource
 import ui.feice.mochi.shape.MochiCapsule
 import ui.feice.mochi.shape.MochiRoundedRectangle
 import ui.feice.mochi.theme.MochiTheme
@@ -41,6 +47,8 @@ import ui.feice.mochi.theme.MochiTheme
 internal fun SeineSupportCard(onOpenSponsor: () -> Unit) {
     val context = LocalContext.current
     val colors = MochiTheme.colorScheme
+    val cardColors = MochiListDefaults.colors()
+    val heroState = LocalSponsorHeroState.current
     val rewardBrush = remember {
         Brush.horizontalGradient(listOf(Color(0xFFF39B58), Color(0xFFE76470)))
     }
@@ -49,6 +57,11 @@ internal fun SeineSupportCard(onOpenSponsor: () -> Unit) {
 
     MochiListCard(
         modifier = Modifier
+            .mochiNavSource(
+                key = SPONSOR_NAV_SOURCE_KEY,
+                cornerRadius = MochiListDefaults.SectionCorner,
+                color = cardColors.container,
+            )
             .clip(MochiRoundedRectangle(MochiListDefaults.SectionCorner))
             .clickable(onClick = onOpenSponsor),
         showDividers = false,
@@ -61,7 +74,14 @@ internal fun SeineSupportCard(onOpenSponsor: () -> Unit) {
             Image(
                 painter = painterResource(R.drawable.seine_support_illustration),
                 contentDescription = null,
-                modifier = Modifier.size(80.dp),
+                modifier = Modifier
+                    .size(80.dp)
+                    .onGloballyPositioned { coords ->
+                        heroState?.sourceIconRect = coords.boundsInRoot()
+                    }
+                    .graphicsLayer {
+                        alpha = if (heroState?.isHeroFlying == true) 0f else 1f
+                    },
             )
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(

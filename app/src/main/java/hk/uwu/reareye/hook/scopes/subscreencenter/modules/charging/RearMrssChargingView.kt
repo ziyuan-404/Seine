@@ -21,6 +21,7 @@ import android.hardware.SensorManager
 import android.os.SystemClock
 import android.view.Surface
 import android.view.View
+import hk.uwu.reareye.hook.scopes.subscreencenter.modules.RearMotionCurves
 import kotlin.math.PI
 import kotlin.math.min
 import kotlin.math.sin
@@ -64,7 +65,7 @@ internal class RearMrssChargingView(context: Context) : RearChargingView(context
         animator?.cancel()
         animator = ValueAnimator.ofFloat(if (animateEntry) 0f else fill, percentage / 100f).apply {
             duration = if (animateEntry) 1800L else 500L
-            interpolator = hk.uwu.reareye.hook.scopes.subscreencenter.modules.RearMotionCurves.enter
+            interpolator = RearMotionCurves.enter
             addUpdateListener { fill = it.animatedValue as Float; invalidate() }
             if (isAttachedToWindow && isShown) start() else fill = percentage / 100f
         }
@@ -77,7 +78,9 @@ internal class RearMrssChargingView(context: Context) : RearChargingView(context
         val h = height.toFloat()
         if (w <= 0f || h <= 0f) return
         canvas.drawColor(Color.argb((255 * backdropProgress).toInt(), 0, 0, 0))
-        val phase = (SystemClock.uptimeMillis() - startedAt) / 1000f * PI.toFloat() * 1.5f
+        val age = if (ValueAnimator.areAnimatorsEnabled()) SystemClock.uptimeMillis() - startedAt else 0L
+        // Five turns also close the slower harmonic (0.6 × five turns).
+        val phase = (age % 6_667L) / 6_667f * PI.toFloat() * 10f
         if (fill >= 1f) {
             canvas.drawRect(0f, 0f, w, h, liquid)
         } else if (fill > 0f) {
@@ -98,7 +101,7 @@ internal class RearMrssChargingView(context: Context) : RearChargingView(context
             canvas.save()
             canvas.clipPath(path)
             repeat(6) { index ->
-                val progress = ((phase * 0.025f + index / 6f) % 1f)
+                val progress = (((age % 8_500L) / 8_500f + index / 6f) % 1f)
                 val x = w * ((index * 0.173f + 0.12f) % 1f) + sin(phase + index) * amplitude
                 canvas.drawCircle(x, h - progress * h * fill, min(w, h) * (0.005f + index * 0.001f), bubble)
             }
@@ -139,7 +142,7 @@ internal class RearMrssChargingView(context: Context) : RearChargingView(context
         if (running) {
             startedAt = SystemClock.uptimeMillis()
             gravity?.let { sensors?.registerListener(this, it, SensorManager.SENSOR_DELAY_UI) }
-            postOnAnimation(frame)
+            if (ValueAnimator.areAnimatorsEnabled()) postOnAnimation(frame)
         } else animator?.cancel()
     }
 

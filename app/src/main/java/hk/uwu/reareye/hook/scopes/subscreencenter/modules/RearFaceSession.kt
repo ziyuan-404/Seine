@@ -16,6 +16,7 @@ internal object RearFaceSession {
     private var context: Context? = null
     private var authorized = false
     private var awake = false
+    private var inAod = false
     var generation = 0L
         private set
     var onChanged: (() -> Unit)? = null
@@ -28,29 +29,46 @@ internal object RearFaceSession {
     }
     private val receiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
-            if (intent.action == "android.intent.action.USER_SWITCHED" ||
-                intent.action == "miui.intent.action.SUB_SCREEN_OFF") reset()
-            else checkDisplay(1)
+            when (intent.action) {
+                "android.intent.action.USER_SWITCHED" -> reset()
+                "miui.intent.action.SUB_SCREEN_OFF" -> {
+                    if (!inAod && displays?.getDisplay(1)?.state == Display.STATE_ON) reset()
+                    else setAwake(false)
+                }
+            }
         }
     }
     fun attach(ctx: Context) {
         if (context != null) return
-        context = ctx.applicationContext
+        val app = ctx.applicationContext ?: ctx
+        context = app
         displays = ctx.getSystemService(DisplayManager::class.java)
-        awake = displays?.getDisplay(1)?.state == Display.STATE_ON
+        inAod = runCatching {
+            if (app.javaClass.name == "com.xiaomi.subscreencenter.SubScreenCenterApp") {
+                app.javaClass.getDeclaredField("m").apply { isAccessible = true }.getBoolean(app)
+            } else false
+        }.getOrDefault(false)
+        checkDisplay(1)
         displays?.registerDisplayListener(listener, main)
         context?.registerReceiver(receiver, IntentFilter().apply {
-            addAction(Intent.ACTION_SCREEN_OFF)
             addAction("android.intent.action.USER_SWITCHED")
             addAction("miui.intent.action.SUB_SCREEN_OFF")
         }, Context.RECEIVER_NOT_EXPORTED)
     }
+    val isInAod: Boolean
+        get() = inAod
     fun isAuthorized(): Boolean {
-        return awake && authorized
+        return authorized && isAwake()
     }
-    fun accept(expectedGeneration: Long) {
+    fun isAwake(): Boolean = awake && !inAod && displays?.getDisplay(1)?.state == Display.STATE_ON
+
+    fun setAod(value: Boolean) {
+        inAod = value
         checkDisplay(1)
-        if (expectedGeneration != generation || displays?.getDisplay(1)?.state != Display.STATE_ON) return
+    }
+
+    fun accept(expectedGeneration: Long) {
+        if (expectedGeneration != generation || !isAwake()) return
         if (!authorized) {
             authorized = true
             onNativeAuthorizationChanged?.invoke(true)
@@ -60,21 +78,26 @@ internal object RearFaceSession {
     }
     private fun checkDisplay(id: Int) {
         if (id != 1) return
-        val now = displays?.getDisplay(1)?.state == Display.STATE_ON
-        if (awake && !now) reset()
+        setAwake(!inAod && displays?.getDisplay(1)?.state == Display.STATE_ON)
+    }
+    private fun setAwake(now: Boolean) {
+        if (awake == now) return
         awake = now
+        if (now) main.post { onChanged?.invoke() } else reset()
     }
     fun reset() {
-        if (authorized) YLog.info("[RearFaceSession] cleared on rear sleep/user change")
+        val wasAuthorized = authorized
+        if (wasAuthorized) YLog.info("[RearFaceSession] cleared on rear sleep/user change")
         authorized = false
         generation++
-        onNativeAuthorizationChanged?.invoke(false)
+        if (wasAuthorized) onNativeAuthorizationChanged?.invoke(false)
         main.post { onChanged?.invoke() }
     }
     fun close() {
+        main.removeCallbacksAndMessages(null)
         displays?.unregisterDisplayListener(listener)
         context?.unregisterReceiver(receiver)
         context = null; displays = null; onChanged = null; onNativeAuthorizationChanged = null
-        authorized = false; generation++
+        awake = false; inAod = false; authorized = false; generation++
     }
 }

@@ -16,8 +16,10 @@ internal abstract class RearChargingView(context: Context) : View(context) {
     private var decimalRate = 0
     private var decimalSampleAt = 0L
     protected var backdropProgress = 0f
+    var quickEntry = false
     private var backdropAnimator: ValueAnimator? = null
     private var exitAnimator: ValueAnimator? = null
+    private var pendingExitFinished: (() -> Unit)? = null
     private val curve = RearMotionCurves.enter
     private val blurMode = runCatching { View::class.java.getMethod("setMiBackgroundBlurMode", Int::class.javaPrimitiveType) }.getOrNull()
     private val blurRadius = runCatching { View::class.java.getMethod("setMiBackgroundBlurRadius", Int::class.javaPrimitiveType) }.getOrNull()
@@ -43,8 +45,10 @@ internal abstract class RearChargingView(context: Context) : View(context) {
 
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
+        backdropAnimator?.cancel()
         backdropAnimator = ValueAnimator.ofFloat(0f, 1f).apply {
-            duration = 380L; interpolator = curve
+            duration = if (quickEntry) 240L else 380L
+            interpolator = curve
             addUpdateListener {
                 backdropProgress = it.animatedValue as Float
                 runCatching {
@@ -60,7 +64,9 @@ internal abstract class RearChargingView(context: Context) : View(context) {
 
     fun exit(finished: () -> Unit) {
         if (exitAnimator != null) return
+        backdropAnimator?.cancel(); backdropAnimator = null
         isClickable = false; keepScreenOn = false
+        pendingExitFinished = finished
         exitAnimator = ValueAnimator.ofFloat(0f, 1f).apply {
             duration = 560L; interpolator = RearMotionCurves.exit
             addUpdateListener {
@@ -71,16 +77,26 @@ internal abstract class RearChargingView(context: Context) : View(context) {
                 setRenderEffect(if (radius > .1f) RenderEffect.createBlurEffect(radius, radius, Shader.TileMode.CLAMP) else null)
             }
             addListener(object : android.animation.AnimatorListenerAdapter() {
-                override fun onAnimationEnd(animation: android.animation.Animator) { finished() }
+                override fun onAnimationEnd(animation: android.animation.Animator) {
+                    exitAnimator = null
+                    completeExit()
+                }
             })
             start()
         }
+    }
+
+    private fun completeExit() {
+        val callback = pendingExitFinished ?: return
+        pendingExitFinished = null
+        callback()
     }
 
     fun stopTransitions() {
         exitAnimator?.removeAllListeners(); exitAnimator?.cancel(); exitAnimator = null
         backdropAnimator?.cancel(); backdropAnimator = null
         setRenderEffect(null)
+        completeExit()
     }
 
     override fun onDetachedFromWindow() {

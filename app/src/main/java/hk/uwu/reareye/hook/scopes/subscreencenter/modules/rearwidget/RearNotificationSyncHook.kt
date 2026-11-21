@@ -44,10 +44,10 @@ import hk.uwu.reareye.hook.utils.createDexKitCacheBridge
 import hk.uwu.reareye.hook.utils.resolveHookPackageVersionCode
 import hk.uwu.reareye.hook.utils.resolveDexKitMethodInjectionPoint
 import org.luckypray.dexkit.annotations.DexKitExperimentalApi
-import hk.uwu.reareye.hook.scopes.subscreencenter.modules.charging.RearChargingHook
 import hk.uwu.reareye.hook.scopes.subscreencenter.modules.NativeRearAppLaunch
 import hk.uwu.reareye.hook.scopes.subscreencenter.modules.RearAppFaceAuth
 import hk.uwu.reareye.hook.scopes.subscreencenter.modules.RearFaceSession
+import hk.uwu.reareye.hook.scopes.subscreencenter.modules.charging.RearChargingHook
 import hk.uwu.reareye.utils.NativeNotificationPrivacy
 import hk.uwu.reareye.ui.config.ConfigKeys
 import hk.uwu.reareye.ui.config.RearNotificationDefaults
@@ -83,12 +83,16 @@ class RearNotificationSyncHook : RoxyHooker() {
     private var groupedSources: Map<String, List<StatusBarNotification>> = emptyMap()
     private val expandedGroups = linkedSetOf<String>()
     private val dismissing = linkedSetOf<String>()
-    private val faceAttempted = mutableSetOf<String>()
     private var privacyPolicy: NativeNotificationPrivacy.Policy? = null
     private data class PrivacyPass(val locked: Boolean, val ranking: NotificationListenerService.RankingMap?)
     private var privacyPass: PrivacyPass? = null
     private var settingsObserver: android.database.ContentObserver? = null
-    private val faceObservers = java.util.WeakHashMap<View, Pair<ViewTreeObserver, ViewTreeObserver.OnPreDrawListener>>()
+    private class FaceObserverHandle(
+        val observer: ViewTreeObserver,
+        val preDraw: ViewTreeObserver.OnPreDrawListener,
+        val attach: View.OnAttachStateChangeListener,
+    )
+    private val faceObservers = java.util.WeakHashMap<View, FaceObserverHandle>()
     private var rearInAod = false
     private var aodChangedAt = 0L
     private var popup = java.lang.ref.WeakReference<ViewGroup>(null)
@@ -105,7 +109,6 @@ class RearNotificationSyncHook : RoxyHooker() {
             if (intent.action == Intent.ACTION_SCREEN_OFF) {
                 RearNotificationGestures.cancelTap()
                 screenLocked = true
-                faceAttempted.clear()
             }
             if (intent.action == Intent.ACTION_USER_PRESENT) {
                 screenLocked = false
@@ -113,7 +116,7 @@ class RearNotificationSyncHook : RoxyHooker() {
                 frontContinuations.clear()
             }
             if (intent.action == "android.intent.action.USER_SWITCHED" || intent.action == "miui.intent.action.SUB_SCREEN_OFF") {
-                faceAttempted.clear(); privacyPolicy = null
+                privacyPolicy = null
             }
             main.post { reconcile() }
         }
@@ -156,11 +159,9 @@ class RearNotificationSyncHook : RoxyHooker() {
                     if (Looper.myLooper() == Looper.getMainLooper()) {
                         attach(host)
                         reconcile()
-                        if (sbn.key in shown) RearChargingHook.notificationAvailable?.invoke()
                     } else main.post {
                         attach(host)
                         reconcile()
-                        if (sbn.key in shown) RearChargingHook.notificationAvailable?.invoke()
                     }
                 }
                 after {
@@ -271,17 +272,10 @@ class RearNotificationSyncHook : RoxyHooker() {
         }, Context.RECEIVER_NOT_EXPORTED)
         receiverContext = ctx
         RearFaceSession.attach(ctx)
+        rearInAod = RearFaceSession.isInAod
         RearFaceSession.onChanged = {
-            main.post {
-                val refresh = {
-                    faceAttempted.clear()
-                    mountedCards.toList().forEach(::refreshMountedPrivacy)
-                    reconcile()
-                }
-                // Authorization is wake-wide. Preloaded neighbor pages must
-                // update now, independently of the current page's visual tail.
-                refresh()
-            }
+            mountedCards.toList().forEach(::refreshMountedPrivacy)
+            reconcile()
         }
         settingsObserver = object : android.database.ContentObserver(main) {
             override fun onChange(selfChange: Boolean) {
@@ -480,11 +474,21 @@ class RearNotificationSyncHook : RoxyHooker() {
         // while AOD was active replayed its desk state for a frame and moved digits.
         val recordingScene = sbn.packageName == "com.android.soundrecorder"
         val timedScene = usesTimerScene(sbn)
+        val n = sbn.notification
+        val extras = n.extras
+        val call = n.category in setOf(Notification.CATEGORY_CALL, Notification.CATEGORY_MISSED_CALL) ||
+            sbn.packageName in setOf("com.android.server.telecom", "com.android.phone", "com.android.incallui")
+        val hasProgress = extras.getInt(Notification.EXTRA_PROGRESS_MAX, 0) > 0 ||
+            extras.getBoolean(Notification.EXTRA_PROGRESS_INDETERMINATE, false)
+        val hasActions = sbn.packageName != "com.tencent.mm" &&
+            n.actions.orEmpty().any { it.actionIntent != null && it.remoteInputs.isNullOrEmpty() }
+        val hasTaskControls = sbn.packageName != "com.tencent.mm" && (call || hasProgress ||
+            extras.getBoolean(Notification.EXTRA_SHOW_CHRONOMETER, false) && n.`when` > 0L ||
+            hasActions)
         // Timer cards keep their dedicated scene through wake, sleep and face
-        // session changes. The shared privacy template belongs to other cards.
-        val privacyLayout = !timedScene && (redacted ||
-            (privacyPolicy ?: NativeNotificationPrivacy.policy(context)).hidesDetails ||
-            RearPopupReveal.usesDownloadLayout(sbn))
+        // session changes. All other cards use the unified new card layout and
+        // adapt icon/text/footer geometry to fit both 17 Pro and 17 Pro Max.
+        val privacyLayout = !timedScene
         val retainedRoot = nativeHost.getChildAt(0)
         if (!privacyLayout && !redacted && timedScene && retainedRoot?.findViewWithTag<NativeRearTimerScene>(NativeRearTimerScene.TAG)?.recording == recordingScene) {
             NativeRearTimerScene.bind(context, retainedRoot, sbn.notification, recordingScene) { index ->
@@ -506,8 +510,6 @@ class RearNotificationSyncHook : RoxyHooker() {
         // forbids in RemoteViews. Inflate it normally inside the authorized host process;
         // never loosen RemoteViews' framework-wide class filter.
         val nativeRoot = LayoutInflater.from(context).inflate(hostId("notification_panel", "layout"), nativeHost, false)
-        val n = sbn.notification
-        val extras = n.extras
         if (!privacyLayout && nativeHost.parent is FrameLayout) {
             val overlay = nativeHost.parent as FrameLayout
             val parent = overlay.parent as ViewGroup
@@ -519,8 +521,6 @@ class RearNotificationSyncHook : RoxyHooker() {
             stack.addView(footer, LinearLayout.LayoutParams(-1, -2))
             parent.addView(stack, index, params)
         }
-        val call = n.category in setOf(Notification.CATEGORY_CALL, Notification.CATEGORY_MISSED_CALL) ||
-            sbn.packageName in setOf("com.android.server.telecom", "com.android.phone", "com.android.incallui")
         val group = groupId(sbn)
         val members = groupedSources[group].orEmpty()
         val app = runCatching {
@@ -572,17 +572,22 @@ class RearNotificationSyncHook : RoxyHooker() {
         // Visibility includes our group toggle after an earlier bind. Derive the
         // layout from notification data so rebinding cannot change its geometry.
         val stopwatch = !privacyLayout && !redacted && NativeRearStopwatchCard.isStopwatch(sbn.packageName, n)
-        val hasTaskControls = sbn.packageName != "com.tencent.mm" && (call ||
-            extras.getInt(Notification.EXTRA_PROGRESS_MAX, 0) > 0 ||
-                extras.getBoolean(Notification.EXTRA_PROGRESS_INDETERMINATE, false) ||
-                extras.getBoolean(Notification.EXTRA_SHOW_CHRONOMETER, false) && n.`when` > 0L ||
-                n.actions.orEmpty().any { it.actionIntent != null && it.remoteInputs.isNullOrEmpty() })
         view.findViewById<View>(R.id.rear_notification_footer)?.let {
             it.setPadding(cameraWidth + margin, it.paddingTop, margin, it.paddingBottom)
             if (hasTaskControls && !privacyLayout) {
                 // Keep the native notification layout; compact only task cards
                 // that have actual progress or action controls.
-                fun dp(value: Int) = (value * context.resources.displayMetrics.density).toInt()
+                val density = context.resources.displayMetrics.density
+                fun dp(value: Int) = (value * density).toInt()
+                val displayHeightPx = view.display?.let { display ->
+                    val size = android.graphics.Point()
+                    @Suppress("DEPRECATION")
+                    display.getRealSize(size)
+                    size.y.takeIf { h -> h > 0 }
+                } ?: context.resources.displayMetrics.heightPixels
+                // 17 Pro rear display is 572px (~203dp); 17 Pro Max is 596px (~212dp).
+                val compactScreen = displayHeightPx / density <= 205f
+                val hasToggle = members.size > 1
                 // The OEM food_delivery/car_hailing cards use system-font weights
                 // 380/450; notification_panel's bold+medium heading is intended for
                 // its large, centered message layout. Use a quieter hierarchy here.
@@ -599,27 +604,33 @@ class RearNotificationSyncHook : RoxyHooker() {
                 }
                 // RemoteViews can be inflated with the main-display density.
                 // Size the footer in the same rear metrics as the native body.
-                it.layoutParams = (it.layoutParams as LinearLayout.LayoutParams).apply { bottomMargin = dp(10) }
+                it.layoutParams = (it.layoutParams as LinearLayout.LayoutParams).apply {
+                    bottomMargin = dp(NativeGroupToggle.BOTTOM_MARGIN_DP)
+                }
                 view.findViewById<View>(R.id.rear_notification_actions)?.apply {
                     layoutParams = (layoutParams as LinearLayout.LayoutParams).apply {
-                        height = dp(38); topMargin = dp(2)
+                        height = dp(if (compactScreen && hasToggle) 34 else if (hasToggle) 36 else 38)
+                        topMargin = dp(if (hasProgress) 6 else 2)
                     }
                 }
+                val iconDp = if (hasProgress && hasActions && hasToggle && compactScreen) 34 else if (hasToggle && compactScreen) 36 else 40
                 val icon = nativeRoot.findViewById<ImageView>(hostId("notification_icon"))
                 icon.apply {
-                    layoutParams = layoutParams.apply { width = dp(40); height = dp(40) }
+                    layoutParams = layoutParams.apply { width = dp(iconDp); height = dp(iconDp) }
                 }
                 nativeRoot.findViewById<ImageView>(hostId("notification_small_icon")).apply {
+                    val badgeDp = if (iconDp < 40) 12 else 14
                     layoutParams = (layoutParams as android.widget.FrameLayout.LayoutParams).apply {
-                        width = dp(14); height = dp(14); topMargin = dp(28); marginStart = dp(16)
+                        width = dp(badgeDp); height = dp(badgeDp)
+                        topMargin = dp(iconDp - badgeDp + 2); marginStart = dp(iconDp / 2 - 4)
                     }
                 }
                 val titleView = nativeRoot.findViewById<TextView>(hostId("notification_title")).apply {
                     // A two-line sender plus actions left less than one body
                     // line in the native host, clipping the glyph descenders.
-                    maxLines = if (call || NativeNotificationPrivacy.isMessage(sbn.packageName, n)) 1 else 2
+                    maxLines = if (call || hasToggle || hasProgress || NativeNotificationPrivacy.isMessage(sbn.packageName, n)) 1 else 2
                     ellipsize = android.text.TextUtils.TruncateAt.END
-                    taskText(20, 500, 25)
+                    taskText(if (compactScreen && hasToggle) 18 else 20, 500, if (compactScreen && hasToggle) 22 else 25)
                     gravity = Gravity.START
                     if (call) {
                         // Country-code numbers must not orphan their last digit
@@ -634,9 +645,7 @@ class RearNotificationSyncHook : RoxyHooker() {
                     isFallbackLineSpacing = true
                     setPadding(0, 0, 0, dp(2))
                     gravity = Gravity.START
-                    val hasProgress = extras.getInt(Notification.EXTRA_PROGRESS_MAX, 0) > 0 ||
-                        extras.getBoolean(Notification.EXTRA_PROGRESS_INDETERMINATE, false)
-                    maxLines = if (hasProgress || call) 1 else 2
+                    maxLines = if (hasProgress || call || (hasActions && hasToggle)) 1 else 2
                     if (hasProgress) {
                         val parts = Regex("^已下载\\s*(.+?)[,，]\\s*共\\s*(.+)$").matchEntire(body)
                         if (parts != null) text = "${parts.groupValues[1]} / ${parts.groupValues[2]}"
@@ -647,7 +656,7 @@ class RearNotificationSyncHook : RoxyHooker() {
                 val imageFrame = icon.parent as View
                 container.removeAllViews()
                 val header = LinearLayout(context).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
-                header.addView(imageFrame, LinearLayout.LayoutParams(dp(42), dp(42)))
+                header.addView(imageFrame, LinearLayout.LayoutParams(dp(iconDp + 2), dp(iconDp + 2)))
                 val labels = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
                 labels.addView(TextView(context).apply {
                     text = app
@@ -658,21 +667,25 @@ class RearNotificationSyncHook : RoxyHooker() {
                 labels.addView(titleView, LinearLayout.LayoutParams(-1, -2))
                 header.addView(labels, LinearLayout.LayoutParams(0, -2, 1f).apply { marginStart = dp(10) })
                 container.addView(header, LinearLayout.LayoutParams(-1, -2))
-                container.addView(bodyView, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(10) })
-                // Task headers must start below the factory clock. The footer
-                // consumes height, so centerVertical previously pushed the
-                // heading into the clock while leaving a large gap below it.
+                container.addView(bodyView, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(if (hasToggle) 6 else 10) })
+                // Task headers must start below the factory clock while leaving
+                // room for progress + action buttons + group toggle on both 17 Pro and 17 Pro Max.
+                val headerTopDp = when {
+                    hasProgress && hasActions && hasToggle -> if (compactScreen) 34 else 40
+                    hasActions && hasToggle -> if (compactScreen) 38 else 44
+                    else -> if (compactScreen) 42 else if (NativeNotificationPrivacy.isMessage(sbn.packageName, n)) 46 else 48
+                }
                 container.layoutParams = (container.layoutParams as android.widget.RelativeLayout.LayoutParams).apply {
                     removeRule(android.widget.RelativeLayout.CENTER_VERTICAL)
                     addRule(android.widget.RelativeLayout.ALIGN_PARENT_TOP)
-                    topMargin = dp(if (NativeNotificationPrivacy.isMessage(sbn.packageName, n)) 48 else 50)
+                    topMargin = dp(headerTopDp)
                 }
                 bodyView.layoutParams = (bodyView.layoutParams as LinearLayout.LayoutParams).apply {
-                    topMargin = dp(if (call || NativeNotificationPrivacy.isMessage(sbn.packageName, n)) 8 else 10)
+                    topMargin = dp(if (hasToggle || call || NativeNotificationPrivacy.isMessage(sbn.packageName, n)) 6 else 10)
                 }
                 listOf(R.id.rear_notification_action_one, R.id.rear_notification_action_two).forEach { id ->
                     view.findViewById<TextView>(id)?.apply {
-                    taskText(14, 500, 20)
+                        taskText(14, 500, 20)
                         setPadding(dp(12), 0, dp(12), 0)
                     }
                 }
@@ -727,10 +740,15 @@ class RearNotificationSyncHook : RoxyHooker() {
         (nativeHost.parent as? LinearLayout)?.gravity = Gravity.TOP
         val footer = view.findViewById<LinearLayout>(R.id.rear_notification_footer)
         footer.visibility = if (!redacted && hasTaskControls && !recorder && !stopwatchBound || members.size > 1) View.VISIBLE else View.GONE
+        val footerDensity = context.resources.displayMetrics.density
         if (messageEntry) {
-            fun dp(value: Int) = (value * context.resources.displayMetrics.density).toInt()
+            fun dp(value: Int) = (value * footerDensity).toInt()
+            val compactFooter = hasActions && members.size > 1
             view.findViewById<View>(R.id.rear_notification_actions)?.layoutParams?.let { params ->
-                params.height = dp(38)
+                (params as? LinearLayout.LayoutParams)?.let {
+                    it.height = dp(if (compactFooter) 34 else 38)
+                    it.topMargin = dp(if (hasProgress) 5 else 0)
+                }
                 view.findViewById<View>(R.id.rear_notification_actions).layoutParams = params
             }
             listOf(R.id.rear_notification_action_one, R.id.rear_notification_action_two).forEach { id ->
@@ -741,10 +759,18 @@ class RearNotificationSyncHook : RoxyHooker() {
                     setPadding(dp(12), 0, dp(12), 0)
                 }
             }
-            (footer.layoutParams as? ViewGroup.MarginLayoutParams)?.let { params ->
-                params.topMargin = 0; params.bottomMargin = dp(NativeGroupToggle.BOTTOM_MARGIN_DP)
-                footer.layoutParams = params
+            view.findViewById<TextView>(R.id.rear_notification_subtext)?.apply {
+                setTextSize(android.util.TypedValue.COMPLEX_UNIT_PX, dp(11).toFloat())
+                includeFontPadding = false
             }
+            view.findViewById<TextView>(R.id.rear_notification_chronometer)?.apply {
+                setTextSize(android.util.TypedValue.COMPLEX_UNIT_PX, dp(18).toFloat())
+                includeFontPadding = false
+            }
+        }
+        (footer.layoutParams as? ViewGroup.MarginLayoutParams)?.let { params ->
+            params.topMargin = 0; params.bottomMargin = (NativeGroupToggle.BOTTOM_MARGIN_DP * footerDensity).toInt()
+            footer.layoutParams = params
         }
         footer.findViewWithTag<View>("rear_notification_group_toggle")?.let { footer.removeView(it) }
         RearPopupReveal.removeQuickOpen(footer)
@@ -752,17 +778,6 @@ class RearNotificationSyncHook : RoxyHooker() {
             footer.visibility = View.VISIBLE
             val toggle = NativeGroupToggle(context, members.size, group in expandedGroups)
             val hasButtons = view.findViewById<View>(R.id.rear_notification_actions)?.visibility == View.VISIBLE
-            if (messageEntry || hasButtons) {
-                // Keep the existing text entrance and touch target. Its label
-                // starts at the top so the invisible half of a centered target
-                // cannot create another large gap below the sender.
-                repeat(toggle.childCount) { index ->
-                    (toggle.getChildAt(index) as? TextView)?.apply {
-                        gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
-                        includeFontPadding = false
-                    }
-                }
-            }
             toggle.setOnClickListener {
                 if (NativeRearMotion.isFlipping(view)) return@setOnClickListener
                 val expanded = if (expandedGroups.remove(group)) false else { expandedGroups.add(group); true }
@@ -780,10 +795,9 @@ class RearNotificationSyncHook : RoxyHooker() {
                 groupReconciles[group] = job
                 main.postDelayed(job, if (android.animation.ValueAnimator.areAnimatorsEnabled()) 220L else 0L)
             }
-            val density = context.resources.displayMetrics.density
             footer.addView(toggle, LinearLayout.LayoutParams(-1,
-                ((if (messageEntry || hasButtons) 26 else NativeGroupToggle.HEIGHT_DP) * density).toInt()).apply {
-                if (hasButtons) topMargin = (6f * density).toInt()
+                (NativeGroupToggle.HEIGHT_DP * footerDensity).toInt()).apply {
+                if (hasButtons) topMargin = (2f * footerDensity).toInt()
             })
         }
         if (messageEntry && members.size <= 1 && canQuickOpen(context, sbn)) {
@@ -824,6 +838,19 @@ class RearNotificationSyncHook : RoxyHooker() {
     }
 
     private fun PackageScope.installNativePanelBehavior() {
+        runCatching {
+            "com.xiaomi.subscreencenter.SubScreenCenterApp".toClass().resolve().firstMethod {
+                name = "c"; parameters(Boolean::class.javaPrimitiveType!!)
+            }.hook {
+                after {
+                    val nextAod = args(0).value == true
+                    if (rearInAod != nextAod) {
+                        rearInAod = nextAod
+                        aodChangedAt = SystemClock.uptimeMillis()
+                    }
+                }
+            }
+        }.onFailure { YLog.warn("Rear notification AOD state sync unavailable", it) }
         "com.xiaomi.subscreencenter.SmartAssistantPanel".toClass().resolve().firstMethod {
             name = "E"; parameters(Boolean::class.javaPrimitiveType!!)
         }.hook {
@@ -864,6 +891,7 @@ class RearNotificationSyncHook : RoxyHooker() {
         popupClass.resolve().firstMethod { name = "h"; parameterCount = 0 }.hook {
             before {
                 (instance as? ViewGroup)?.let {
+                    clearFaceObserver(it)
                     RearMessageEntryMotion.finish(it)
                     RearNotificationReveal.forget(it)
                     RearPopupReveal.forget(it)
@@ -908,14 +936,19 @@ class RearNotificationSyncHook : RoxyHooker() {
         launcherClass.resolve().firstMethod { name = "dispatchTouchEvent"; parameterCount = 1 }.hook {
             before {
                 val event = args.firstOrNull() as? MotionEvent ?: return@before
+                val activity = instance as? android.app.Activity ?: return@before
+                val chargingOverlay = activity.window?.decorView?.findViewWithTag<View>("reareye_charging_overlay")
+                if (chargingOverlay?.let { it.isShown && it.isClickable } == true) {
+                    panelOwnsGesture = false
+                    if (event.actionMasked == MotionEvent.ACTION_DOWN) RearNotificationGestures.cancelGesture()
+                    return@before
+                }
                 if (event.actionMasked == MotionEvent.ACTION_DOWN) {
-                    val activity = instance as? android.app.Activity ?: return@before
                     NativeRearReply.activity = java.lang.ref.WeakReference(activity)
                     val containerId = activity.resources.getIdentifier("assistant_container", "id", activity.packageName)
                     val container = activity.findViewById<View>(containerId)
                     panelOwnsGesture = enabled() && container?.isShown == true && container.getGlobalVisibleRect(Rect())
                 }
-                val activity = instance as? android.app.Activity ?: return@before
                 if (enabled() && RearNotificationGestures.dispatch(activity, event)) result = true
             }
         }
@@ -1045,20 +1078,54 @@ class RearNotificationSyncHook : RoxyHooker() {
         null
     }.getOrNull()
 
-    private fun revealWithFace(view: View, sbn: StatusBarNotification) {
-        if (rearInAod || !view.isAttachedToWindow || !view.isShown || privacy(sbn) != true) return
-        if (!NativeNotificationPrivacy.faceRequired(view.context)) return
-        val authenticate = RearAppFaceAuth.authenticate ?: return
-        if (active[sbn.key]?.postTime != sbn.postTime || !faceAttempted.add(sbn.key)) return
-        val generation = RearFaceSession.generation
-        authenticate(view, false) {
-            // Shared wake authorization refreshes every card once after the
-            // visual exit. Rebinding here too would cancel that crossfade.
-            if (!RearFaceSession.isAuthorized() && generation == RearFaceSession.generation && active[sbn.key]?.postTime == sbn.postTime &&
-                view.isAttachedToWindow && view.display?.state == Display.STATE_ON) {
-                RearFaceSession.accept(generation)
+    private fun revealWithFace(view: View, sbn: StatusBarNotification, manual: Boolean): Boolean {
+        if (!canShowFace(view)) return false
+        if (active[sbn.key]?.postTime != sbn.postTime || privacy(sbn) != true ||
+            !NativeNotificationPrivacy.faceRequired(view.context)) return true
+        return RearAppFaceAuth.requestNotification?.invoke(view, sbn.key, manual) == true
+    }
+
+    private fun canShowFace(view: View): Boolean =
+        !rearInAod && !RearChargingHook.blocksFaceAuth && RearFaceSession.isAwake() && !RearFaceSession.isAuthorized() &&
+            view.isAttachedToWindow && view.isShown && view.alpha >= .8f &&
+            (isPopup(view) || NativeRearCardHost.isSelected(view)) &&
+            !NativeRearMotion.isFlipping(view) && RearMessageEntryMotion.ready(view)
+
+    private fun clearFaceObserver(view: View) {
+        faceObservers.remove(view)?.let { handle ->
+            if (handle.observer.isAlive) handle.observer.removeOnPreDrawListener(handle.preDraw)
+            view.removeOnAttachStateChangeListener(handle.attach)
+        }
+    }
+
+    private fun observeFace(view: View, source: StatusBarNotification) {
+        clearFaceObserver(view)
+        val observer = view.viewTreeObserver
+        val bounds = Rect()
+        var lastWake = -1L
+        val callback = ViewTreeObserver.OnPreDrawListener {
+            if (!canShowFace(view) || !view.getGlobalVisibleRect(bounds) ||
+                bounds.width() < view.width * .8f || bounds.height() < view.height * .8f) {
+                lastWake = -1L
+            } else if (lastWake != RearFaceSession.generation && RearAppFaceAuth.requestNotification != null) {
+                lastWake = RearFaceSession.generation
+                view.post {
+                    if (!revealWithFace(view, source, manual = false)) lastWake = -1L
+                }
+            }
+            true
+        }
+        val attachListener = object : View.OnAttachStateChangeListener {
+            override fun onViewAttachedToWindow(v: View) = Unit
+            override fun onViewDetachedFromWindow(v: View) {
+                if (observer.isAlive) observer.removeOnPreDrawListener(callback)
+                if (faceObservers[v]?.preDraw === callback) faceObservers.remove(v)
+                v.removeOnAttachStateChangeListener(this)
             }
         }
+        observer.addOnPreDrawListener(callback)
+        faceObservers[view] = FaceObserverHandle(observer, callback, attachListener)
+        view.addOnAttachStateChangeListener(attachListener)
     }
 
     private fun isPopup(view: View) = popup.get() === view
@@ -1078,12 +1145,10 @@ class RearNotificationSyncHook : RoxyHooker() {
             text = "在背屏快捷打开"
             setTextColor(-1)
             setTextSize(android.util.TypedValue.COMPLEX_UNIT_PX, 13f * density)
-            gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
+            gravity = Gravity.CENTER
             includeFontPadding = false; maxLines = 1
             isClickable = true; isFocusable = true
-            layoutParams = LinearLayout.LayoutParams(-1, (26f * density).toInt()).apply {
-                if (popup) topMargin = (6f * density).toInt()
-            }
+            layoutParams = LinearLayout.LayoutParams(-1, (NativeGroupToggle.HEIGHT_DP * density).toInt())
             setOnClickListener {
                 if (rearInAod || NativeRearMotion.isFlipping(view)) return@setOnClickListener
                 if (popup && (!isPopup(view) || !view.isShown || alpha < .8f ||
@@ -1093,8 +1158,7 @@ class RearNotificationSyncHook : RoxyHooker() {
                 }.getOrNull() else active[sbn.key]
                 val latest = current?.takeIf { it.postTime == sbn.postTime } ?: return@setOnClickListener
                 if (privacy(latest) != false) {
-                    faceAttempted.remove(latest.key)
-                    revealWithFace(view, latest)
+                    revealWithFace(view, latest, manual = true)
                     return@setOnClickListener
                 }
                 if (popup) {
@@ -1148,9 +1212,7 @@ class RearNotificationSyncHook : RoxyHooker() {
         // theme, even when this entry uses the unmodified native content path.
         NativeRearCardTheme.bind(panel, sbn)
         val redacted = privacy(sbn) ?: run { panel.visibility = View.GONE; return }
-        val custom = !usesTimerScene(sbn) &&
-            ((privacyPolicy ?: NativeNotificationPrivacy.policy(panel.context)).hidesDetails || redacted ||
-                RearPopupReveal.usesDownloadLayout(sbn))
+        val custom = !usesTimerScene(sbn)
         val showQuickOpen = canQuickOpen(panel.context, sbn)
         val binding = "${RearMessageEntryMotion.version(sbn)}:$redacted:$custom:$showQuickOpen:" +
             listOf(Notification.EXTRA_TITLE, Notification.EXTRA_TEXT, Notification.EXTRA_BIG_TEXT)
@@ -1159,12 +1221,11 @@ class RearNotificationSyncHook : RoxyHooker() {
         popupBinding = binding
         val quickOpen = if (showQuickOpen) quickOpenHint(panel, sbn, popup = true) else null
         if (!custom) {
-            faceObservers.remove(panel)?.let { (observer, callback) -> if (observer.isAlive) observer.removeOnPreDrawListener(callback) }
+            clearFaceObserver(panel)
             RearMessageEntryMotion.finish(panel)
             RearPopupReveal.forget(panel)
             RearPopupLifetime.forget(panel)
-            val containerId = panel.resources.getIdentifier("notification_container", "id", "com.xiaomi.subscreencenter")
-            quickOpen?.let { panel.findViewById<LinearLayout>(containerId)?.addView(it) }
+            RearPopupReveal.attachQuickOpen(panel, quickOpen)
             popupSource = null
             return
         }
@@ -1177,25 +1238,8 @@ class RearNotificationSyncHook : RoxyHooker() {
         RearPopupReveal.bind(panel, sbn, redacted, app, entry, quickOpen = quickOpen)
         RearPopupLifetime.bind(panel, RearMessageEntryMotion.version(sbn), redacted)
         RearMessageEntryMotion.bind(panel, panel, RearMessageEntryMotion.version(sbn), redacted, popup = true)
-        faceObservers.remove(panel)?.let { (observer, callback) -> if (observer.isAlive) observer.removeOnPreDrawListener(callback) }
-        if (!redacted) return
-        val observer = panel.viewTreeObserver
-        val callback = object : ViewTreeObserver.OnPreDrawListener {
-            override fun onPreDraw(): Boolean {
-                if (!panel.isAttachedToWindow) {
-                    if (observer.isAlive) observer.removeOnPreDrawListener(this)
-                    faceObservers.remove(panel)
-                    return true
-                }
-                if (!panel.isShown || !RearMessageEntryMotion.ready(panel) || rearInAod || panel.display?.state != Display.STATE_ON) return true
-                if (observer.isAlive) observer.removeOnPreDrawListener(this)
-                faceObservers.remove(panel)
-                panel.post { if (popupSource == sbn.key) revealWithFace(panel, sbn) }
-                return true
-            }
-        }
-        observer.addOnPreDrawListener(callback)
-        faceObservers[panel] = observer to callback
+        clearFaceObserver(panel)
+        if (redacted) observeFace(panel, sbn)
     }
 
     private val mountedCards = java.util.Collections.newSetFromMap(java.util.WeakHashMap<View, Boolean>())
@@ -1226,7 +1270,7 @@ class RearNotificationSyncHook : RoxyHooker() {
     }
 
     private fun bindCard(view: View, animateContent: Boolean = false) {
-        faceObservers.remove(view)?.let { (observer, callback) -> if (observer.isAlive) observer.removeOnPreDrawListener(callback) }
+        clearFaceObserver(view)
         // Camera spacing belongs to the stock notification layout. Changing this
         // outer padding during page translation/scaling causes text/icon jumps.
         view.setPadding(0, 0, 0, 0)
@@ -1249,30 +1293,8 @@ class RearNotificationSyncHook : RoxyHooker() {
         NativeRearCardTheme.aod(view, rearInAod)
         if (redacted) {
             view.isClickable = true
-            view.setOnClickListener { faceAttempted.remove(key); revealWithFace(view, sbn) }
-            val observer = view.viewTreeObserver
-            val beforeDraw = object : ViewTreeObserver.OnPreDrawListener {
-                override fun onPreDraw(): Boolean {
-                    if (!view.isAttachedToWindow) { if (observer.isAlive) observer.removeOnPreDrawListener(this); return true }
-                    if (rearInAod || !(isPopup(view) || NativeRearCardHost.isSelected(view)) || !RearMessageEntryMotion.ready(view) || !view.isShown || view.alpha < .8f || view.display?.state != Display.STATE_ON) return true
-                    val rect = Rect()
-                    if (!view.getGlobalVisibleRect(rect) || rect.width() < view.width * .8f || rect.height() < view.height * .8f) return true
-                    if (observer.isAlive) observer.removeOnPreDrawListener(this)
-                    faceObservers.remove(view)
-                    view.post { revealWithFace(view, sbn) }
-                    return true
-                }
-            }
-            observer.addOnPreDrawListener(beforeDraw)
-            faceObservers[view] = observer to beforeDraw
-            view.addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
-                override fun onViewAttachedToWindow(v: View) = Unit
-                override fun onViewDetachedFromWindow(v: View) {
-                    if (observer.isAlive) observer.removeOnPreDrawListener(beforeDraw)
-                    faceObservers.remove(v)
-                    v.removeOnAttachStateChangeListener(this)
-                }
-            })
+            view.setOnClickListener { revealWithFace(view, sbn, manual = true) }
+            observeFace(view, sbn)
         }
         if (!redacted) {
             view.isClickable = true
@@ -1290,9 +1312,10 @@ class RearNotificationSyncHook : RoxyHooker() {
                     if (key in frontContinuations || view.findViewWithTag<View>(NativeRearContinuation.VIEW_TAG) != null) {
                         NativeRearMotion.flip(view, returning = true) {
                             frontContinuations.remove(key)
+                            view.findViewById<ViewGroup>(R.id.rear_notification_native_host)?.let(RearNotificationReveal::forget)
                             val current = active[key]
                             val host = listener
-                            val currentRedacted = rendered[key]?.redacted
+                            val currentRedacted = current?.let(::privacy) ?: rendered[key]?.redacted
                             if (current != null && host != null && currentRedacted != null) {
                                 buildViews(host, current, token, currentRedacted).reapply(view.context, view)
                             }
@@ -1359,7 +1382,7 @@ class RearNotificationSyncHook : RoxyHooker() {
         if (shown.remove(key)) RearNotificationCards.remove?.invoke(key)
     }
 
-    private fun remove(key: String) { hide(key); active.remove(key); tokens.remove(key); faceAttempted.remove(key) }
+    private fun remove(key: String) { hide(key); active.remove(key); tokens.remove(key) }
     private fun clear() {
         popupRetry?.let(main::removeCallbacks); popupRetry = null
         popupBinding = null; popupSource = null
@@ -1369,13 +1392,12 @@ class RearNotificationSyncHook : RoxyHooker() {
         NativeRearCardTheme.clear()
         RearPopupLifetime.clear()
         RearMessageEntryMotion.finishAll()
-        faceObservers.values.forEach { (observer, callback) -> if (observer.isAlive) observer.removeOnPreDrawListener(callback) }
-        faceObservers.clear()
-        faceAttempted.clear(); privacyPolicy = null; privacyPass = null
+        faceObservers.keys.toList().forEach(::clearFaceObserver)
+        privacyPolicy = null; privacyPass = null
         shown.toList().forEach(::hide); active.clear(); tokens.clear()
         groupedSources = emptyMap(); expandedGroups.clear(); dismissing.clear()
         groupReconciles.values.forEach(main::removeCallbacks); groupReconciles.clear()
-        RearNotificationGestures.cancelTap()
+        RearNotificationGestures.cancelGesture()
     }
 
     override fun onHotReloadQuiesce() {

@@ -92,7 +92,7 @@ fun isAppInDarkTheme(themeMode: AppThemeMode): Boolean {
 internal val LocalSeineMiuixStyle = staticCompositionLocalOf { false }
 
 data class MochiColorSettings(
-    val mode: Int = -1,
+    val mode: Int = DEFAULT_COLOR_MODE,
     val palette: Int = 0,
     val seed: Int? = null,
 ) {
@@ -112,7 +112,12 @@ data class MochiColorSettings(
         }
 
     fun keyColor(theme: AppThemeMode): Color =
-        seed?.let(::Color) ?: if (theme.usesMiuix) Color(0xFF684D77) else Color(0xFF67539F)
+        seed?.let(::Color) ?: if (theme.usesMiuix) Color(0xFF684D77) else Color(DEFAULT_SEED_COLOR)
+
+    companion object {
+        const val DEFAULT_COLOR_MODE = 0
+        const val DEFAULT_SEED_COLOR = 0xFF2B6A5A.toInt()
+    }
 }
 
 @Composable

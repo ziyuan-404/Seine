@@ -81,6 +81,7 @@ object ConfigKeys {
     const val REAR_LIQUID_CHARGING = "rear_liquid_charging"
     const val REAR_CHARGING_STYLE = "rear_charging_style"
     const val REAR_LIQUID_CHARGING_PERSISTENT = "rear_liquid_charging_persistent"
+    const val REAR_LIQUID_CHARGING_SCREEN_OFF = "rear_liquid_charging_screen_off"
     const val REAR_SCREEN_TIMEOUT_SECONDS = "rear_screen_timeout_seconds"
 
     const val HOOK_BACKGROUND_WHITELIST = "enable_background_whitelist_hook"
@@ -649,17 +650,19 @@ val REAREyeConfig = listOf(
                         key = ConfigKeys.REAR_LIQUID_CHARGING,
                         titleRes = R.string.rear_liquid_charging,
                         descriptionRes = R.string.rear_liquid_charging_desc,
-                        type = ConfigType.BooleanVal(defaultValue = false),
+                        type = ConfigType.BooleanVal(defaultValue = RearChargingDefaults.ENABLED),
                     ),
                     ConfigItem(
                         key = ConfigKeys.REAR_CHARGING_STYLE,
                         titleRes = R.string.rear_charging_style,
                         descriptionRes = R.string.rear_charging_style_desc,
                         type = ConfigType.EnumSingleSelect(
-                            defaultValue = 1,
+                            defaultValue = RearChargingDefaults.defaultStyle(),
                             options = listOf(
                                 ConfigType.EnumOption(R.string.rear_charging_style_mrss, 0),
                                 ConfigType.EnumOption(R.string.rear_charging_style_glow, 1),
+                                ConfigType.EnumOption(R.string.rear_charging_style_leica, 2),
+                                ConfigType.EnumOption(R.string.rear_charging_style_leica_green, 3),
                             ),
                         ),
                     ),
@@ -667,7 +670,13 @@ val REAREyeConfig = listOf(
                         key = ConfigKeys.REAR_LIQUID_CHARGING_PERSISTENT,
                         titleRes = R.string.rear_liquid_charging_persistent,
                         descriptionRes = R.string.rear_liquid_charging_persistent_desc,
-                        type = ConfigType.BooleanVal(defaultValue = false),
+                        type = ConfigType.BooleanVal(defaultValue = RearChargingDefaults.PERSISTENT),
+                    ),
+                    ConfigItem(
+                        key = ConfigKeys.REAR_LIQUID_CHARGING_SCREEN_OFF,
+                        titleRes = R.string.rear_liquid_charging_screen_off,
+                        descriptionRes = R.string.rear_liquid_charging_screen_off_desc,
+                        type = ConfigType.BooleanVal(defaultValue = RearChargingDefaults.SCREEN_OFF),
                     ),
                 ),
             ),

@@ -25,13 +25,12 @@ internal class ReferenceRearChargeText(context: android.content.Context) {
         color = Color.WHITE
         typeface = family
     }
-    private val power = Paint(Paint.ANTI_ALIAS_FLAG or Paint.SUBPIXEL_TEXT_FLAG).apply {
-        color = 0xffffe500.toInt()
-        typeface = runCatching {
-            val source = context.createPackageContext("com.android.systemui", 0)
-            Typeface.createFromAsset(source.assets, "fonts/Flynnsans-charge.otf")
-        }.getOrDefault(Typeface.create("sans-serif-medium", Typeface.NORMAL))
-    }
+    private val statusFace = Typeface.create(family, 650, false)
+    private val wattFace = runCatching {
+        val source = context.createPackageContext("com.android.systemui", 0)
+        Typeface.createFromAsset(source.assets, "fonts/Flynnsans-charge.otf")
+    }.getOrDefault(statusFace)
+    private val power = Paint(Paint.ANTI_ALIAS_FLAG or Paint.SUBPIXEL_TEXT_FLAG)
 
     private val bounds = android.graphics.Rect()
     data class Layout(val textSize: Float, val cell: Float, val drawLeft: Float,
@@ -79,6 +78,7 @@ internal class ReferenceRearChargeText(context: android.content.Context) {
     fun draw(canvas: Canvas, value: String, width: Float, height: Float,
         numberAlpha: Float, powerAlpha: Float, speed: Int, watts: Int, closed: Boolean,
         stateLabel: String, layout: Layout) {
+        if (numberAlpha <= 0f && powerAlpha <= 0f) return
         // All characters, including fractional digits and %, share one face,
         // weight, size and baseline in the video.
         val label = "$value%"
@@ -116,14 +116,20 @@ internal class ReferenceRearChargeText(context: android.content.Context) {
                 x += logoWidth + height * .006f * fit
             }
         } else {
-            power.textSize = height * .066f
-            power.alpha = (powerAlpha * 255).toInt().coerceIn(0, 255)
+            val hasWatts = speed >= 3 && watts > 0
+            power.typeface = if (hasWatts) wattFace else statusFace
+            power.color = if (hasWatts) 0xffffe674.toInt() else 0xfff3ffe8.toInt()
+            power.textSize = height * .071f
             val text = when {
-                speed >= 3 && watts > 0 -> "${watts}W" + if (closed) "" else " MAX"
+                hasWatts -> "${watts}W" + if (closed) "" else " MAX"
                 speed == 1 -> if (stateLabel.startsWith("无线")) stateLabel else rapidLabel
                 else -> stateLabel.ifBlank { "正在充电" }
             }
-            canvas.drawText(text, left, height * .70f, power)
+            val available = (width - left - height * .035f).coerceAtLeast(1f)
+            val measured = power.measureText(text)
+            if (measured > available) power.textSize *= available / measured
+            power.alpha = (powerAlpha * 255).toInt().coerceIn(0, 255)
+            canvas.drawText(text, left, height * .714f, power)
         }
     }
 }

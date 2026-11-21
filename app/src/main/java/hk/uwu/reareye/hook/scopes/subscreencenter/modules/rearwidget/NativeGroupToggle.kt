@@ -12,8 +12,8 @@ import android.widget.TextView
 /** Two real text views, clipped to one line, so labels roll through the same slot. */
 internal class NativeGroupToggle(context: Context, private val count: Int, expanded: Boolean) : TextSwitcher(context) {
     companion object {
-        const val HEIGHT_DP = 36
-        const val BOTTOM_MARGIN_DP = 12
+        const val HEIGHT_DP = 26
+        const val BOTTOM_MARGIN_DP = 10
         fun hintCenter(height: Float, density: Float) = height - (BOTTOM_MARGIN_DP + HEIGHT_DP / 2f) * density
     }
     private var expanded = expanded
@@ -23,7 +23,10 @@ internal class NativeGroupToggle(context: Context, private val count: Int, expan
         clipChildren = true; clipToPadding = true
         setFactory {
             TextView(context).apply {
-                setTextColor(0xFFFFFFFF.toInt()); textSize = 13f; gravity = Gravity.CENTER
+                setTextColor(0xFFFFFFFF.toInt())
+                setTextSize(android.util.TypedValue.COMPLEX_UNIT_PX, 13f * context.resources.displayMetrics.density)
+                gravity = Gravity.CENTER
+                includeFontPadding = false
                 layoutParams = LayoutParams(-1, -1)
                 importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
             }

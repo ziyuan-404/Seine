@@ -127,6 +127,7 @@ internal val MoreConfigGroups = listOf(
                 ConfigKeys.REAR_LIQUID_CHARGING,
                 ConfigKeys.REAR_CHARGING_STYLE,
                 ConfigKeys.REAR_LIQUID_CHARGING_PERSISTENT,
+                ConfigKeys.REAR_LIQUID_CHARGING_SCREEN_OFF,
             ),
         ),
     ),

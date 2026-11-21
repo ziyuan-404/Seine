@@ -43,6 +43,8 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -52,6 +54,9 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import hk.uwu.reareye.R
+import hk.uwu.reareye.ui.components.motion.LocalSponsorHeroState
+import hk.uwu.reareye.ui.components.motion.lerpF
+import hk.uwu.reareye.ui.components.motion.smoothstepF
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -96,6 +101,7 @@ private enum class SponsorPayment(
 internal fun SeineSponsorScreen(onBack: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val heroState = LocalSponsorHeroState.current
     var payment by rememberSaveable { mutableStateOf(SponsorPayment.WECHAT) }
     var saving by remember { mutableStateOf(false) }
     val rotation = animateFloatAsState(
@@ -128,13 +134,34 @@ internal fun SeineSponsorScreen(onBack: () -> Unit) {
         }
     }
 
+    val isHeroActive = heroState?.isHeroFlying == true
+    val cardUnfold = if (isHeroActive && heroState != null) heroState.cardUnfoldProgress.value else 1f
+    val chromeReveal = if (isHeroActive && heroState != null) heroState.chromeRevealProgress.value else 1f
+
     MochiLazyLargeTitleScaffold(
         title = stringResource(R.string.seine_support_reward_page),
-        navigationIcon = { MochiBackButton(onClick = onBack) },
+        navigationIcon = {
+            Box(
+                modifier = Modifier.graphicsLayer {
+                    alpha = chromeReveal.coerceIn(0f, 1f)
+                },
+            ) {
+                MochiBackButton(onClick = onBack)
+            }
+        },
         contentSpacing = 16.dp,
     ) {
         item(key = "payment") {
-            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .graphicsLayer {
+                        val c = chromeReveal.coerceIn(0f, 1f)
+                        alpha = c
+                        translationY = 12.dp.toPx() * (1f - c)
+                    },
+                contentAlignment = Alignment.Center,
+            ) {
                 MochiSegmentedControl(
                     items = persistentListOf(
                         stringResource(R.string.seine_support_wechat_tab),
@@ -155,7 +182,16 @@ internal fun SeineSponsorScreen(onBack: () -> Unit) {
                         .widthIn(max = 304.dp)
                         .fillMaxWidth()
                         .aspectRatio(.69f)
+                        .onGloballyPositioned { coords ->
+                            heroState?.targetCardRect = coords.boundsInRoot()
+                        }
                         .graphicsLayer {
+                            val u = cardUnfold
+                            val uc = u.coerceIn(0f, 1f)
+                            scaleX = lerpF(0.66f, 1f, u)
+                            scaleY = lerpF(0.48f, 1f, u)
+                            translationY = (-34).dp.toPx() * (1f - u)
+                            alpha = if (isHeroActive) smoothstepF(0.02f, 0.72f, uc) else 1f
                             cameraDistance = size.width * 2.2f
                             rotationX = tilt.value.y
                             rotationY = rotation.value - (if (face == SponsorPayment.ALIPAY) 180f else 0f) + tilt.value.x
@@ -168,7 +204,16 @@ internal fun SeineSponsorScreen(onBack: () -> Unit) {
             }
         }
         item(key = "save") {
-            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .graphicsLayer {
+                        val c = chromeReveal.coerceIn(0f, 1f)
+                        alpha = c
+                        translationY = 18.dp.toPx() * (1f - c)
+                    },
+                contentAlignment = Alignment.Center,
+            ) {
                 Column(
                     modifier = Modifier.widthIn(max = 304.dp).fillMaxWidth(),
                     verticalArrangement = Arrangement.spacedBy(8.dp),

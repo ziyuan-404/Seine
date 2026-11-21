@@ -40,6 +40,7 @@ import hk.uwu.reareye.ui.config.ConfigKeys
 import hk.uwu.reareye.ui.config.ConfigNode
 import hk.uwu.reareye.ui.config.ConfigType
 import hk.uwu.reareye.ui.config.ModuleSettingsController
+import hk.uwu.reareye.ui.config.RearChargingDefaults
 import hk.uwu.reareye.ui.config.RearNotificationDefaults
 import hk.uwu.reareye.ui.config.PrefsManager
 import hk.uwu.reareye.ui.config.StoreApiProvider
@@ -385,6 +386,8 @@ fun EnumSingleSelectConfigInput(
         val fallback = when (item.key) {
             ConfigKeys.REAR_APP_FACE_AUTH_STYLE, ConfigKeys.REAR_NOTIFICATION_FACE_AUTH_STYLE ->
                 prefsManager.getInt(ConfigKeys.REAR_FACE_AUTH_STYLE, defaultValue)
+            ConfigKeys.REAR_CHARGING_STYLE ->
+                RearChargingDefaults.defaultStyle(context)
             else -> defaultValue
         }
         return prefsManager.getInt(item.key, fallback)

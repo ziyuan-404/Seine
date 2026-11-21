@@ -24,12 +24,6 @@ import java.util.WeakHashMap
 
 /** Final app configuration only: the physical display and rear system UI retain their density. */
 class RearAppDensityHook : RoxyHooker() {
-    /** The camera port owns this process' rear-screen Resources and menu geometry. */
-    private val excludedPackages = setOf(
-        "com.android.camera",
-        "com.kobbin.leicaflavor",
-        "xyz.shuncongci.leica",
-    )
     // Calendar uses the native MIUI freeform resize path. Reapplying the rear
     // compatibility scale on every setFreeformScale/geometry callback pins its
     // small-window ratio and makes the resize handle report unsupported sizing.
@@ -37,6 +31,15 @@ class RearAppDensityHook : RoxyHooker() {
     private var reloading=false
     override fun onHotReloadQuiesce() { reloading=true }
     companion object {
+        private val cameraPackages = setOf("com.android.camera", "com.kobbin.leicaflavor", "xyz.shuncongci.leica")
+
+        internal fun usesNativeCameraWindow(record: Any): Boolean {
+            val component = Server.component(record) ?: return false
+            if (component.substringBefore('/') in cameraPackages) return true
+            return component == "com.miui.gallery/com.miui.gallery.activity.ExternalPhotoPageActivity" &&
+                Server.field(record, "launchedFromPackage") in cameraPackages
+        }
+
         @Volatile private var current:((Any,Configuration)->Unit)?=null
         fun applyConfiguration(record:Any,parent:Configuration) { current?.invoke(record,parent) }
     }
@@ -727,8 +730,9 @@ class RearAppDensityHook : RoxyHooker() {
                 }
                 if(!active||!settings.get().enabled)return@configure
                 if(Server.displayId(record)!=1||ActivityHostTaskConfigurationHook.isOwnedTask(record))return@configure
+                if(usesNativeCameraWindow(record))return@configure
                 val pkg=Server.component(record)?.substringBefore('/')?:return@configure
-                if(pkg in excludedPackages || pkg in setOf("android","com.android.systemui","com.xiaomi.subscreencenter","com.miui.miwallpaper","com.miui.aod",BuildConfig.APPLICATION_ID))return@configure
+                if(pkg in setOf("android","com.android.systemui","com.xiaomi.subscreencenter","com.miui.miwallpaper","com.miui.aod",BuildConfig.APPLICATION_ID))return@configure
                 val info=Server.field(record,"info") as? ActivityInfo?:return@configure
                 if(info.applicationInfo.uid%100000<10000)return@configure
                 if(appUids.add(info.applicationInfo.uid))invalidateDisplayInfo()
@@ -781,7 +785,8 @@ class RearAppDensityHook : RoxyHooker() {
                     val root=Server.field(service,"mRootWindowContainer")?:return@runCatching
                     val lock=Server.field(service,"mGlobalLock")?:return@runCatching
                     val visit=java.util.function.Consumer<Any> { task ->
-                        if(Server.displayId(task)==1&&Server.call(task,"isActivityTypeHome")!=true)
+                        if(Server.displayId(task)==1&&Server.call(task,"isActivityTypeHome")!=true&&
+                            Server.call(task,"getTopMostActivity")?.let(::usesNativeCameraWindow)!=true)
                             synchronized(tasks) { tasks.add(task) }
                     }
                     val walk=generateSequence<Class<*>>(root.javaClass) { it.superclass }

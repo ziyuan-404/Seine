@@ -1,7 +1,7 @@
 <resources>
     <string name="seine_rear_enhancement_title">妙享背屏增强</string>
     <string name="seine_rear_enhancement_desc">背屏应用白名单、键盘、人脸验证与应用栏布局</string>
-    <string name="seine_support_title">请作者喝杯咖啡</string>
+    <string name="seine_support_title">助力作者买Lo裙</string>
     <string name="seine_support_summary">支持 Seine 背屏继续打磨</string>
     <string name="seine_support_alipay">支付宝</string>
     <string name="seine_support_wechat">微信支付</string>
@@ -50,6 +50,7 @@
     <string name="seine_home_assistant_version">助理版本</string>
     <string name="seine_home_themes_version">主题壁纸版本</string>
     <string name="seine_home_active">已激活</string>
+    <string name="home_update_checking_island">正在检查更新</string>
     <string name="seine_setting_save_failed">无法保存此设置</string>
     <string name="module_mochi_graphics_level">Mochi 画质档位</string>
     <string name="module_mochi_graphics_level_desc">调整界面特效与模糊强度</string>

@@ -46,7 +46,14 @@ import hk.uwu.reareye.ui.components.PresetPackDialog
 import hk.uwu.reareye.ui.components.SubscreenNotificationAccessPrompt
 import hk.uwu.reareye.ui.components.TargetAppVersionDialog
 import hk.uwu.reareye.ui.components.motion.ArtVisibilityMotion
+import hk.uwu.reareye.ui.components.motion.LocalSponsorHeroState
+import hk.uwu.reareye.ui.components.motion.SPONSOR_NAV_SOURCE_KEY
+import hk.uwu.reareye.ui.components.motion.SponsorHeroOverlay
+import hk.uwu.reareye.ui.components.motion.rememberSponsorHeroState
 import hk.uwu.reareye.ui.components.navigation.NavigationQuickTarget
+import ui.feice.mochi.navigation.MochiNavHost
+import ui.feice.mochi.navigation.mochiHideWhenCovered
+import ui.feice.mochi.navigation.rememberMochiNavigator
 import hk.uwu.reareye.ui.components.navigation.RearNavigationBar
 import hk.uwu.reareye.ui.components.navigation.encodeNavigationQuickActionIds
 import hk.uwu.reareye.ui.components.navigation.parseNavigationQuickActionIds
@@ -223,7 +230,11 @@ class MainActivity : ComponentActivity() {
                                 AppThemeMode.default.value,
                             ),
                             mochiColors = MochiColorSettings(
-                                mode = remotePrefsManager.getInt(ConfigKeys.MODULE_MOCHI_COLOR_MODE, -1),
+                                mode = remotePrefsManager.getInt(
+                                    ConfigKeys.MODULE_MOCHI_COLOR_MODE,
+                                    if (remotePrefsManager.prefs.contains(ConfigKeys.MODULE_THEME_MODE)) -1
+                                    else MochiColorSettings.DEFAULT_COLOR_MODE,
+                                ),
                                 palette = remotePrefsManager.getInt(ConfigKeys.MODULE_MOCHI_PALETTE_STYLE, 0),
                                 seed = if (remotePrefsManager.prefs.contains(ConfigKeys.MODULE_MOCHI_SEED_COLOR)) {
                                     remotePrefsManager.getInt(ConfigKeys.MODULE_MOCHI_SEED_COLOR, 0)
@@ -267,13 +278,19 @@ class MainActivity : ComponentActivity() {
             }
 
             var currentScreen by remember { mutableStateOf("home") }
+            val rootNavigator = rememberMochiNavigator("main")
+            val sponsorHeroState = rememberSponsorHeroState()
+            LaunchedEffect(rootNavigator.current) {
+                if (rootNavigator.current == "main") {
+                    sponsorHeroState.resetImmediate()
+                }
+            }
             // The Rear Store is a configuration-level destination, so the system back gesture
             // returns to Configuration instead of finishing the activity. Deeper store routes
             // (widget detail) consume back themselves before this handler sees it.
-            BackHandler(enabled = currentScreen == "store") {
+            BackHandler(enabled = rootNavigator.current == "main" && currentScreen == "store") {
                 currentScreen = "config"
             }
-            BackHandler(enabled = currentScreen == "support") { currentScreen = "home" }
             var showPresetPackDialog by remember { mutableStateOf(false) }
             var navBarVisible by remember { mutableStateOf(false) }
             var configInAppListMode by remember { mutableStateOf(false) }
@@ -318,28 +335,19 @@ class MainActivity : ComponentActivity() {
                 val glassNavigation = navigationBarMode == ModuleNavigationBarMode.FLOATING_GLASS ||
                     navigationBarMode == ModuleNavigationBarMode.SEMI_TRANSPARENT
                 val showNavigation =
-                    navBarVisible && currentScreen != "support" && !(currentScreen == "config" && configInAppListMode)
+                    navBarVisible && !(currentScreen == "config" && configInAppListMode)
                 val density = LocalDensity.current
                 val surfaceColor = MiuixTheme.colorScheme.surface
                 val backdrop = if (glassNavigation) rememberMochiBackdrop(surfaceColor) else null
                 var stableBottomInset by remember { mutableStateOf(0.dp) }
                 val marySidebarGestureHost = remember { MarySidebarPageGestureHost() }
-                val launchReveal = remember { androidx.compose.animation.core.Animatable(0f) }
-                LaunchedEffect(Unit) {
-                    launchReveal.animateTo(
-                        1f,
-                        androidx.compose.animation.core.tween(
-                            420,
-                            easing = androidx.compose.animation.core.FastOutSlowInEasing,
-                        ),
-                    )
-                }
 
                 CompositionLocalProvider(
                     hk.uwu.reareye.ui.components.LocalRearSearchBarStyle provides
                         hk.uwu.reareye.ui.config.ModuleSearchBarStyle.fromValue(settings.searchBarStyleValue),
                     LocalFeatureGuideAnchors provides guideAnchors.takeIf { featureGuideVisible },
                     LocalMarySidebarPageGestureHost provides marySidebarGestureHost,
+                    LocalSponsorHeroState provides sponsorHeroState,
                 ) {
                     // Keep the popup host full-window: MIUIX dialogs own their IME avoidance.
                     Scaffold { _ ->
@@ -347,243 +355,262 @@ class MainActivity : ComponentActivity() {
                             modifier = Modifier
                                 .fillMaxSize()
                                 .background(surfaceColor)
-                                .graphicsLayer {
-                                    alpha = launchReveal.value
-                                    translationY = 14.dp.toPx() * (1f - launchReveal.value)
-                                }
-                                .marySidebarPageGesture(marySidebarGestureHost,
-                                    enabled = currentScreen == "mary" && !showPresetPackDialog && !featureGuideVisible)
                                 // Navigation stays at the physical window bottom. Screens own
                                 // IME avoidance; never shrink this shared root or its popup host.
                                 .graphicsLayer { clip = true }
                         ) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .marySidebarBackground(marySidebarGestureHost)
-                                    .mochiBackdropSource(backdrop)
-                            ) {
-                                AnimatedContent(
-                                    targetState = currentScreen,
-                                    contentKey = { it },
-                                    transitionSpec = {
-                                        if (pendingQuickActionTransition && targetState == "config") {
-                                            pendingQuickActionTransition = false
-                                            return@AnimatedContent ContentTransform(
-                                                targetContentEnter = EnterTransition.None,
-                                                initialContentExit = ExitTransition.None,
-                                            )
-                                        }
+                            MochiNavHost(
+                                navigator = rootNavigator,
+                                modifier = Modifier.fillMaxSize(),
+                                windowGlass = false,
+                            ) { route ->
+                                when (route) {
+                                    "support" -> SeineSponsorScreen(onBack = { rootNavigator.pop() })
 
-                                        val initialIndex =
-                                            MainScreenOrder.indexOf(initialState).coerceAtLeast(0)
-                                        val targetIndex =
-                                            MainScreenOrder.indexOf(targetState).coerceAtLeast(0)
-                                        val forward = targetIndex >= initialIndex
-
-                                        fadeIn(
-                                            animationSpec = tween(
-                                                durationMillis = 210,
-                                                delayMillis = 50,
-                                                easing = LinearOutSlowInEasing,
-                                            )
-                                        ) + slideInHorizontally(
-                                            animationSpec = tween(
-                                                durationMillis = 280,
-                                                easing = FastOutSlowInEasing,
-                                            )
-                                        ) { fullWidth ->
-                                            if (forward) fullWidth / 9 else -fullWidth / 9
-                                        } togetherWith (
-                                                fadeOut(
-                                                    animationSpec = tween(
-                                                        durationMillis = 110,
-                                                        easing = FastOutLinearInEasing,
-                                                    )
-                                                ) + slideOutHorizontally(
-                                                    animationSpec = tween(
-                                                        durationMillis = 190,
-                                                        easing = FastOutLinearInEasing,
-                                                    )
-                                                ) { fullWidth ->
-                                                    if (forward) -fullWidth / 12 else fullWidth / 12
-                                                }
-                                                )
-                                    },
-                                    label = "ScreenTransition"
-                                ) { screen ->
-                                    when (screen) {
-                                        "home" -> Box(modifier = Modifier.fillMaxSize()) {
-                                            HomeScreen(
-                                                bottomInnerPadding = stableBottomInset,
-                                                onOpenSponsor = { currentScreen = "support" },
-                                            )
-                                        }
-
-                                        "store" -> RearStoreScreen(
-                                            bottomInnerPadding = stableBottomInset,
-                                            initialWidgetId = pendingRearStoreWidgetId,
-                                            onInitialWidgetHandled = {
-                                                pendingRearStoreWidgetId = null
-                                            },
-                                            onBack = {
-                                                configInAppListMode = false
-                                                currentScreen = "config"
-                                            },
-                                        )
-
-                                        "mary" -> Box(modifier = Modifier.fillMaxSize()) {
-                                            var marySettingsOpen by remember {
-                                                mutableStateOf(false)
-                                            }
-                                            BackHandler(enabled = marySettingsOpen) {
-                                                marySettingsOpen = false
-                                            }
-                                            if (marySettingsOpen) {
-                                                MarySettingsScreen(
-                                                    bottomInnerPadding = stableBottomInset,
-                                                    onBack = { marySettingsOpen = false },
-                                                )
-                                            } else {
-                                                MaryScreen(
-                                                    bottomInnerPadding = stableBottomInset,
-                                                    onOpenSettings = { marySettingsOpen = true },
-                                                )
-                                            }
-                                        }
-
-                                        "config" -> Box(modifier = Modifier.fillMaxSize()) {
-                                            if (featureGuideVisible) {
-                                                FeatureGuideDemoScreen(
-                                                    step = guideStep,
-                                                    state = guideDemoState,
-                                                    bottomPadding = stableBottomInset,
-                                                    onCancelEdit = {
-                                                        featureGuideStep =
-                                                            (featureGuideStep - 1).coerceAtLeast(0)
-                                                    },
-                                                    onAction = { action ->
-                                                        if (featureGuideSteps[featureGuideStep].action == action) {
-                                                            featureGuideStep += 1
-                                                        }
-                                                    },
-                                                )
-                                            } else ConfigScreen(
-                                                onOpenPresetPackDialog = { showPresetPackDialog = true },
-                                                bottomInnerPadding = stableBottomInset,
-                                                quickManagerTarget = pendingConfigQuickManagerTarget,
-                                                onQuickManagerTargetHandled = {
-                                                    pendingConfigQuickManagerTarget = null
-                                                },
-                                                onAppListModeChange = {
-                                                    configInAppListMode = it
-                                                },
-                                                onAppearanceChanged = { appearanceRevision++ },
-                                                onOpenRearStore = {
-                                                    configInAppListMode = false
-                                                    currentScreen = "store"
-                                                },
-                                                onOpenRearStoreDetail = { widgetId ->
-                                                    pendingRearStoreWidgetId = widgetId
-                                                    configInAppListMode = false
-                                                    currentScreen = "store"
-                                                },
-                                            )
-                                        }
-
-                                        "support" -> SeineSponsorScreen(onBack = { currentScreen = "home" })
-
-                                        "about" -> AboutScreen(bottomInnerPadding = stableBottomInset)
-                                    }
-                                }
-                            }
-
-                            val navShadowProgress by animateFloatAsState(
-                                targetValue = if (showNavigation) 1f else 0f,
-                                animationSpec = tween(
-                                    durationMillis = if (showNavigation) 380 else 240,
-                                    easing = if (showNavigation) {
-                                        FastOutSlowInEasing
-                                    } else {
-                                        FastOutLinearInEasing
-                                    },
-                                ),
-                                label = "NavigationShadowProgress",
-                            )
-                            if (showNavigation || navShadowProgress > 0.001f) {
-                                // This bar does not avoid the IME: it stays put behind the keyboard.
-                                // Measure only the bar; Mary combines this gap with (not adds it to) IME.
-                                Box(
-                                    modifier = Modifier
-                                        .align(Alignment.BottomCenter)
-                                        .marySidebarBackground(marySidebarGestureHost),
-                                ) {
-                                    ArtVisibilityMotion(
-                                        visible = showNavigation,
+                                    else -> Box(
                                         modifier = Modifier
-                                            .align(Alignment.BottomCenter)
-                                            .featureGuideAnchor("bottom_navigation")
-                                            .onGloballyPositioned { coordinates ->
-                                                val totalHeight = with(density) {
-                                                    coordinates.size.height.toDp()
-                                                }
-                                                if (totalHeight != stableBottomInset) {
-                                                    stableBottomInset = totalHeight
-                                                }
-                                            },
-                                        enterAlphaDurationMillis = 260,
-                                        enterTransformDurationMillis = 380,
-                                        exitAlphaDurationMillis = 180,
-                                        exitTransformDurationMillis = 240,
-                                        hiddenEnterScale = 1f,
-                                        hiddenExitScale = 1f,
-                                        slideDivisor = 3,
-                                        hiddenOffsetFallback = 28.dp,
+                                            .fillMaxSize()
+                                            .marySidebarPageGesture(
+                                                marySidebarGestureHost,
+                                                enabled = currentScreen == "mary" && !showPresetPackDialog && !featureGuideVisible,
+                                            ),
                                     ) {
-                                        RearNavigationBar(
-                                            // The Rear Store is a configuration-level destination,
-                                            // so the Configuration tab stays highlighted while it is open.
-                                            currentScreen = if (currentScreen == "store") "config" else currentScreen,
-                                            navigationBarMode = navigationBarMode,
-                                            backdrop = backdrop,
-                                            quickActionIds = navigationQuickActionIds,
-                                            onQuickActionIdsChanged = { nextIds ->
-                                                val normalizedIds = parseNavigationQuickActionIds(
-                                                    encodeNavigationQuickActionIds(nextIds)
-                                                )
-                                                navigationQuickActionIds = normalizedIds
-                                                remotePrefsManager.putString(
-                                                    ConfigKeys.MODULE_NAVIGATION_QUICK_ACTIONS,
-                                                    encodeNavigationQuickActionIds(normalizedIds),
-                                                )
-                                            },
-                                            onScreenSelected = { currentScreen = it },
-                                            onQuickActionSelected = { target ->
-                                                when (target) {
-                                                    is NavigationQuickTarget.ConfigManager -> {
-                                                        pendingConfigQuickManagerTarget =
-                                                            target.managerType
-                                                        pendingQuickActionTransition = true
-                                                        // Dashboard managers stay inside the new configuration
-                                                        // workbench and keep the navigation bar visible. Only
-                                                        // dedicated More pages use the full-screen overlay mode.
-                                                        configInAppListMode =
-                                                            target.managerType in setOf(
-                                                                ConfigType.ManagerType.SCENE_ROUTE,
-                                                                ConfigType.ManagerType.BOUNDS,
-                                                                ConfigType.ManagerType.REAR_APP_DISPLAY,
-                                                            )
-                                                        currentScreen = "config"
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxSize()
+                                                .marySidebarBackground(marySidebarGestureHost)
+                                                .mochiBackdropSource(backdrop)
+                                        ) {
+                                            AnimatedContent(
+                                                targetState = currentScreen,
+                                                contentKey = { it },
+                                                transitionSpec = {
+                                                    if (pendingQuickActionTransition && targetState == "config") {
+                                                        pendingQuickActionTransition = false
+                                                        return@AnimatedContent ContentTransform(
+                                                            targetContentEnter = EnterTransition.None,
+                                                            initialContentExit = ExitTransition.None,
+                                                        )
                                                     }
+
+                                                    val initialIndex =
+                                                        MainScreenOrder.indexOf(initialState).coerceAtLeast(0)
+                                                    val targetIndex =
+                                                        MainScreenOrder.indexOf(targetState).coerceAtLeast(0)
+                                                    val forward = targetIndex >= initialIndex
+
+                                                    fadeIn(
+                                                        animationSpec = tween(
+                                                            durationMillis = 210,
+                                                            delayMillis = 50,
+                                                            easing = LinearOutSlowInEasing,
+                                                        )
+                                                    ) + slideInHorizontally(
+                                                        animationSpec = tween(
+                                                            durationMillis = 280,
+                                                            easing = FastOutSlowInEasing,
+                                                        )
+                                                    ) { fullWidth ->
+                                                        if (forward) fullWidth / 9 else -fullWidth / 9
+                                                    } togetherWith (
+                                                            fadeOut(
+                                                                animationSpec = tween(
+                                                                    durationMillis = 110,
+                                                                    easing = FastOutLinearInEasing,
+                                                                )
+                                                            ) + slideOutHorizontally(
+                                                                animationSpec = tween(
+                                                                    durationMillis = 190,
+                                                                    easing = FastOutLinearInEasing,
+                                                                )
+                                                            ) { fullWidth ->
+                                                                if (forward) -fullWidth / 12 else fullWidth / 12
+                                                            }
+                                                            )
+                                                },
+                                                label = "ScreenTransition"
+                                            ) { screen ->
+                                                when (screen) {
+                                                    "home" -> Box(modifier = Modifier.fillMaxSize()) {
+                                                        HomeScreen(
+                                                            bottomInnerPadding = stableBottomInset,
+                                                            onOpenSponsor = {
+                                                                sponsorHeroState.triggerOpen()
+                                                                rootNavigator.push("support", from = SPONSOR_NAV_SOURCE_KEY)
+                                                            },
+                                                        )
+                                                    }
+
+                                                    "store" -> RearStoreScreen(
+                                                        bottomInnerPadding = stableBottomInset,
+                                                        initialWidgetId = pendingRearStoreWidgetId,
+                                                        onInitialWidgetHandled = {
+                                                            pendingRearStoreWidgetId = null
+                                                        },
+                                                        onBack = {
+                                                            configInAppListMode = false
+                                                            currentScreen = "config"
+                                                        },
+                                                    )
+
+                                                    "mary" -> Box(modifier = Modifier.fillMaxSize()) {
+                                                        var marySettingsOpen by remember {
+                                                            mutableStateOf(false)
+                                                        }
+                                                        BackHandler(enabled = marySettingsOpen) {
+                                                            marySettingsOpen = false
+                                                        }
+                                                        if (marySettingsOpen) {
+                                                            MarySettingsScreen(
+                                                                bottomInnerPadding = stableBottomInset,
+                                                                onBack = { marySettingsOpen = false },
+                                                            )
+                                                        } else {
+                                                            MaryScreen(
+                                                                bottomInnerPadding = stableBottomInset,
+                                                                onOpenSettings = { marySettingsOpen = true },
+                                                            )
+                                                        }
+                                                    }
+
+                                                    "config" -> Box(modifier = Modifier.fillMaxSize()) {
+                                                        if (featureGuideVisible) {
+                                                            FeatureGuideDemoScreen(
+                                                                step = guideStep,
+                                                                state = guideDemoState,
+                                                                bottomPadding = stableBottomInset,
+                                                                onCancelEdit = {
+                                                                    featureGuideStep =
+                                                                        (featureGuideStep - 1).coerceAtLeast(0)
+                                                                },
+                                                                onAction = { action ->
+                                                                    if (featureGuideSteps[featureGuideStep].action == action) {
+                                                                        featureGuideStep += 1
+                                                                    }
+                                                                },
+                                                            )
+                                                        } else ConfigScreen(
+                                                            onOpenPresetPackDialog = { showPresetPackDialog = true },
+                                                            bottomInnerPadding = stableBottomInset,
+                                                            quickManagerTarget = pendingConfigQuickManagerTarget,
+                                                            onQuickManagerTargetHandled = {
+                                                                pendingConfigQuickManagerTarget = null
+                                                            },
+                                                            onAppListModeChange = {
+                                                                configInAppListMode = it
+                                                            },
+                                                            onAppearanceChanged = { appearanceRevision++ },
+                                                            onOpenRearStore = {
+                                                                configInAppListMode = false
+                                                                currentScreen = "store"
+                                                            },
+                                                            onOpenRearStoreDetail = { widgetId ->
+                                                                pendingRearStoreWidgetId = widgetId
+                                                                configInAppListMode = false
+                                                                currentScreen = "store"
+                                                            },
+                                                        )
+                                                    }
+
+                                                    "about" -> AboutScreen(bottomInnerPadding = stableBottomInset)
                                                 }
-                                            },
+                                            }
+                                        }
+
+                                        val navShadowProgress by animateFloatAsState(
+                                            targetValue = if (showNavigation) 1f else 0f,
+                                            animationSpec = tween(
+                                                durationMillis = if (showNavigation) 380 else 240,
+                                                easing = if (showNavigation) {
+                                                    FastOutSlowInEasing
+                                                } else {
+                                                    FastOutLinearInEasing
+                                                },
+                                            ),
+                                            label = "NavigationShadowProgress",
+                                        )
+                                        if (showNavigation || navShadowProgress > 0.001f) {
+                                            // This bar does not avoid the IME: it stays put behind the keyboard.
+                                            // Measure only the bar; Mary combines this gap with (not adds it to) IME.
+                                            Box(
+                                                modifier = Modifier
+                                                    .align(Alignment.BottomCenter)
+                                                    .mochiHideWhenCovered()
+                                                    .marySidebarBackground(marySidebarGestureHost),
+                                            ) {
+                                                ArtVisibilityMotion(
+                                                    visible = showNavigation,
+                                                    modifier = Modifier
+                                                        .align(Alignment.BottomCenter)
+                                                        .featureGuideAnchor("bottom_navigation")
+                                                        .onGloballyPositioned { coordinates ->
+                                                            val totalHeight = with(density) {
+                                                                coordinates.size.height.toDp()
+                                                            }
+                                                            if (totalHeight != stableBottomInset) {
+                                                                stableBottomInset = totalHeight
+                                                            }
+                                                        },
+                                                    enterAlphaDurationMillis = 260,
+                                                    enterTransformDurationMillis = 380,
+                                                    exitAlphaDurationMillis = 180,
+                                                    exitTransformDurationMillis = 240,
+                                                    hiddenEnterScale = 1f,
+                                                    hiddenExitScale = 1f,
+                                                    slideDivisor = 3,
+                                                    hiddenOffsetFallback = 28.dp,
+                                                ) {
+                                                    RearNavigationBar(
+                                                        // The Rear Store is a configuration-level destination,
+                                                        // so the Configuration tab stays highlighted while it is open.
+                                                        currentScreen = if (currentScreen == "store") "config" else currentScreen,
+                                                        navigationBarMode = navigationBarMode,
+                                                        backdrop = backdrop,
+                                                        quickActionIds = navigationQuickActionIds,
+                                                        onQuickActionIdsChanged = { nextIds ->
+                                                            val normalizedIds = parseNavigationQuickActionIds(
+                                                                encodeNavigationQuickActionIds(nextIds)
+                                                            )
+                                                            navigationQuickActionIds = normalizedIds
+                                                            remotePrefsManager.putString(
+                                                                ConfigKeys.MODULE_NAVIGATION_QUICK_ACTIONS,
+                                                                encodeNavigationQuickActionIds(normalizedIds),
+                                                            )
+                                                        },
+                                                        onScreenSelected = { currentScreen = it },
+                                                        onQuickActionSelected = { target ->
+                                                            when (target) {
+                                                                is NavigationQuickTarget.ConfigManager -> {
+                                                                    pendingConfigQuickManagerTarget =
+                                                                        target.managerType
+                                                                    pendingQuickActionTransition = true
+                                                                    // Dashboard managers stay inside the new configuration
+                                                                    // workbench and keep the navigation bar visible. Only
+                                                                    // dedicated More pages use the full-screen overlay mode.
+                                                                    configInAppListMode =
+                                                                        target.managerType in setOf(
+                                                                            ConfigType.ManagerType.SCENE_ROUTE,
+                                                                            ConfigType.ManagerType.BOUNDS,
+                                                                            ConfigType.ManagerType.REAR_APP_DISPLAY,
+                                                                        )
+                                                                    currentScreen = "config"
+                                                                }
+                                                            }
+                                                        },
+                                                    )
+                                                }
+                                            }
+                                        }
+
+                                        MarySidebarPagePreview(
+                                            marySidebarGestureHost,
+                                            enabled = currentScreen == "mary" && !showPresetPackDialog && !featureGuideVisible,
                                         )
                                     }
                                 }
                             }
 
-                            MarySidebarPagePreview(marySidebarGestureHost,
-                                enabled = currentScreen == "mary" && !showPresetPackDialog && !featureGuideVisible)
+                            SponsorHeroOverlay(sponsorHeroState)
 
                             SubscreenNotificationAccessPrompt(
                                 enabled = !featureGuideVisible && !showPresetPackDialog,

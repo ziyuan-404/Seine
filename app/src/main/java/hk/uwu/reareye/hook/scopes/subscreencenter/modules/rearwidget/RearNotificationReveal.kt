@@ -30,16 +30,17 @@ internal object RearNotificationReveal {
         val binding = Binding(source, version, hidden, message)
         val old = bindings[host]
         val previous = host.getChildAt(0)
+        val isContinuation = previous?.tag == NativeRearContinuation.VIEW_TAG
         // Ranking/RemoteViews updates may bind the very same data again during
         // the reveal. Keep the current views and the running transition intact.
-        if (old == binding && previous != null) return previous
+        if (old == binding && previous != null && !isContinuation) return previous
         running.remove(host)?.invoke()
-        val reveal = old?.source == source && old.hidden && !hidden && previous != null &&
+        val reveal = old?.source == source && old.hidden && !hidden && previous != null && !isContinuation &&
             host.isAttachedToWindow && host.isShown && host.alpha > .1f &&
             ValueAnimator.areAnimatorsEnabled()
         bindings[host] = binding
 
-        if (old?.source == source && old.message && message && previous is ViewGroup) {
+        if (old?.source == source && old.message && message && previous is ViewGroup && !isContinuation) {
             if (retainMessageContent) return previous
             // Reuse the mounted message root, especially its icon/frame. Text
             // updates never remeasure or fade the icon and never move the card.

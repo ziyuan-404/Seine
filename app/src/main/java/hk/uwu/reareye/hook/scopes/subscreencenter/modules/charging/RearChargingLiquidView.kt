@@ -9,7 +9,9 @@ import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.RuntimeShader
 import android.os.SystemClock
+import android.view.animation.PathInterpolator
 import hk.uwu.reareye.hook.scopes.subscreencenter.modules.RearMotionCurves
+import kotlin.math.PI
 
 /** Reference clip, 35–39 s: blur → centered lightning → ring → liquid → charge value. */
 internal class RearChargingLiquidView(context: Context) : RearChargingView(context) {
@@ -28,7 +30,7 @@ internal class RearChargingLiquidView(context: Context) : RearChargingView(conte
     private val car = art("charge_animation_car_flip_mode_icon")
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { isDither = true }
     private val motion = RearMotionCurves.enter
-    private val grow = RearMotionCurves.spring(context, .84f, .58f, 650L)
+    private val swell = PathInterpolator(.18f, 0f, .30f, 1f)
     private val colours = ArgbEvaluator()
     private val green = 0xff00c995.toInt()
     private val yellow = 0xffffe500.toInt()
@@ -37,6 +39,8 @@ internal class RearChargingLiquidView(context: Context) : RearChargingView(conte
         uniform float surface;
         uniform float phase;
         uniform float reveal;
+        uniform float2 textCenter;
+        uniform float2 textRadius;
         half4 main(float2 p) {
             float line = surface + sin(p.x / size.x * 6.283185 + phase) * size.y * 0.028
                 + sin(p.x / size.x * 3.141593 - phase * 0.5) * size.y * 0.009;
@@ -45,6 +49,8 @@ internal class RearChargingLiquidView(context: Context) : RearChargingView(conte
             float haze = 0.72 * exp(min(depth, 0.0) / (size.y * 0.15));
             float alpha = mix(haze, 1.0, water) * reveal;
             half3 colour = mix(half3(0.035, 0.40, 0.21), half3(0.0, 0.98, 0.73), half(water));
+            float2 textOffset = (p - textCenter) / textRadius;
+            colour *= half(1.0 - 0.58 * exp(-dot(textOffset, textOffset)));
             return half4(colour * half(alpha), half(alpha));
         }
     """.trimIndent())
@@ -78,7 +84,6 @@ internal class RearChargingLiquidView(context: Context) : RearChargingView(conte
     // actual lit display height (the video crop includes a border below it).
     private val ringRadius = floatArrayOf(.10f,.11f,.13f,.16f,.19f,.22f,.28f,.35f,.44f,.56f,.69f,.81f,.94f,1.06f,1.15f,1.22f,1.25f)
     private val ringOpacity = floatArrayOf(0f,.025f,.05f,.08f,.13f,.20f,.28f,.34f,.34f,.29f,.24f,.19f,.13f,.08f,.04f,.01f,0f)
-    private val glowExtent = floatArrayOf(.12f,.13f,.15f,.18f,.22f,.28f,.35f,.42f,.47f,.50f,.52f,.53f,.54f,.54f,.54f,.54f,.54f)
     private fun sample(values: FloatArray, progress: Float): Float {
         val x = progress.coerceIn(0f, 1f) * values.lastIndex
         val i = x.toInt(); val t = x - i
@@ -96,7 +101,7 @@ internal class RearChargingLiquidView(context: Context) : RearChargingView(conte
     override fun updateBattery(percent: Int, statusLabel: String, animateEntry: Boolean, socDecimal: Int?) {
         percentage = percent.coerceIn(0, 100)
         stateLabel = statusLabel
-        decimal = socDecimal.takeIf { percentage < 100 && nativeSpeed > 0 }
+        decimal = socDecimal.takeIf { percentage < 100 }
         if (animateEntry) entryAt = 0L
         invalidate()
     }
@@ -106,41 +111,45 @@ internal class RearChargingLiquidView(context: Context) : RearChargingView(conte
         val w = width.toFloat(); val h = height.toFloat()
         if (w <= 0f || h <= 0f) return
         if (entryAt == 0L) entryAt = SystemClock.uptimeMillis()
-        val age = if (ValueAnimator.areAnimatorsEnabled()) (SystemClock.uptimeMillis() - entryAt).toFloat() else 4000f
+        val elapsed = if (ValueAnimator.areAnimatorsEnabled()) SystemClock.uptimeMillis() - entryAt else 4000L
+        val age = elapsed.coerceAtMost(4000L).toFloat()
         fun phase(start: Float, duration: Float) = ((age - start) / duration).coerceIn(0f, 1f)
         fun ease(start: Float, duration: Float) = motion.getInterpolation(phase(start, duration))
 
         // The launcher stays visible behind the first lightning and ripple.
         // Only then does its background darken as the liquid enters from below.
-        val dark = ease(1180f, 520f)
+        val dark = ease(1100f, 650f)
         canvas.drawColor(Color.argb((backdropProgress * (.10f + .83f * dark) * 255).toInt(), 0, 0, 0))
-        val rise = ease(1690f, 480f)
-        if (rise > 0f) {
-            val fraction = percentage / 100f
-            val surface = h * (1.12f - (fraction + .12f) * rise)
-            liquidShader.setFloatUniform("size", w, h)
-            liquidShader.setFloatUniform("surface", surface)
-            liquidShader.setFloatUniform("phase", age / 1150f)
-            liquidShader.setFloatUniform("reveal", ease(1690f, 180f))
-            paint.shader = liquidShader; paint.alpha = 255
-            canvas.drawRect(0f, 0f, w, h, paint)
-            paint.shader = null
-        }
-        val intro = ease(180f, 240f)
-        val growth = grow.getInterpolation(phase(180f, 650f))
-        val slide = ease(2050f, 440f)
         val bolt = when {
             nativeSpeed >= 3 && !doubleChargeClosed -> strongBolt
             nativeSpeed >= 2 -> doubleBolt
             else -> singleBolt ?: doubleBolt
         }
         val drawable = if (nativeCarMode) car ?: bolt else bolt
-        val finalIconWidth = h * .28f * (drawable?.intrinsicWidth ?: 1) /
+        val finalIconWidth = h * .28f * (drawable?.intrinsicWidth ?: 1).coerceAtLeast(1) /
             (drawable?.intrinsicHeight ?: 1).coerceAtLeast(1)
         val value = decimalLevel(percentage, decimal) ?: percentage.toString()
         val cameraEdge = (rootWindowInsets?.displayCutout?.safeInsetLeft?.takeIf { it > 0 }
             ?: display?.cutout?.safeInsetLeft ?: 0).coerceAtLeast(0).toFloat()
         val textLayout = typography.layout(value, w, h, cameraEdge, finalIconWidth)
+        val rise = ease(1520f, 720f)
+        if (rise > 0f) {
+            val fraction = percentage / 100f
+            val surface = h * (1.12f - (fraction + .12f) * rise)
+            liquidShader.setFloatUniform("size", w, h)
+            liquidShader.setFloatUniform("surface", surface)
+            // Both wave harmonics finish together. The entrance keeps its own clock.
+            liquidShader.setFloatUniform("phase", (elapsed % 14_450L) / 14_450f * 4f * PI.toFloat())
+            liquidShader.setFloatUniform("reveal", ease(1520f, 280f))
+            liquidShader.setFloatUniform("textCenter", textLayout.inkLeft + textLayout.inkWidth / 2f, h * .565f)
+            liquidShader.setFloatUniform("textRadius", textLayout.inkWidth / 2f + h * .20f, h * .31f)
+            paint.shader = liquidShader; paint.alpha = 255
+            canvas.drawRect(0f, 0f, w, h, paint)
+            paint.shader = null
+        }
+        val intro = RearMotionCurves.content.getInterpolation(phase(140f, 380f))
+        val growth = swell.getInterpolation(phase(140f, 620f))
+        val slide = RearMotionCurves.content.getInterpolation(phase(1850f, 590f))
         val x = w * .59f + (textLayout.iconCenterX - w * .59f) * slide
         val y = h * .50f
         val iconH = h * (.35f - .07f * slide) * (.12f + .88f * growth)
@@ -148,19 +157,20 @@ internal class RearChargingLiquidView(context: Context) : RearChargingView(conte
         haloShader.setFloatUniform("center", x, y)
         // The soft glow continues expanding after the bolt has settled. Its
         // extent is independent of bolt size, including the later left shift.
-        val glowRadius = h * sample(glowExtent, phase(300f, 900f)) * 1.4f * (1f - .16f * slide)
+        val glowRadius = h * (.14f + .60f * swell.getInterpolation(phase(180f, 1100f))) * (1f - .16f * slide)
         haloShader.setFloatUniform("radius", glowRadius.coerceAtLeast(1f))
         haloShader.setFloatUniform("tint", Color.red(colour) / 255f, Color.green(colour) / 255f, Color.blue(colour) / 255f)
         // In the clip the halo peaks before the liquid arrives, then leaves a
         // faint halo around the bolt; a constant peak glow obscures the wave.
-        val haloTail = 1f - .77f * ease(1120f, 650f)
-        paint.shader = haloShader; paint.alpha = (255 * intro * haloTail).toInt()
+        val haloAttack = RearMotionCurves.content.getInterpolation(phase(175f, 500f))
+        val haloTail = 1f - .82f * RearMotionCurves.exit.getInterpolation(phase(610f, 1100f))
+        paint.shader = haloShader; paint.alpha = (255 * haloAttack * haloTail).toInt()
         canvas.drawRect(0f, 0f, w, h, paint)
         paint.shader = null; paint.alpha = 255
 
         // Separate radius and brightness curves preserve the visible expanding
         // band; a huge final radius made the old pulse leave the screen early.
-        val ripple = phase(430f, 533.333f)
+        val ripple = phase(445f, 620f)
         if (ripple > 0f && ripple < 1f) {
             rippleShader.setFloatUniform("center", w * .59f, h * .50f)
             rippleShader.setFloatUniform("radius", h * sample(ringRadius, ripple))
@@ -178,7 +188,7 @@ internal class RearChargingLiquidView(context: Context) : RearChargingView(conte
         }
         // Like the OEM counter, switch to two decimal places only after a
         // real SOC sample arrives; the ordinary battery update is an integer.
-        typography.draw(canvas, value, w, h, ease(2160f, 380f), ease(2550f, 360f),
+        typography.draw(canvas, value, w, h, ease(2080f, 460f), ease(2370f, 440f),
             nativeSpeed, nativeWatts, doubleChargeClosed, stateLabel, textLayout)
     }
 
@@ -191,7 +201,7 @@ internal class RearChargingLiquidView(context: Context) : RearChargingView(conte
         val visible = isAttachedToWindow && windowVisibility == VISIBLE && isShown
         if (visible == running) return
         running = visible; removeCallbacks(frame)
-        if (running) postOnAnimation(frame)
+        if (running && ValueAnimator.areAnimatorsEnabled()) postOnAnimation(frame)
     }
     override fun onDetachedFromWindow() {
         running = false; removeCallbacks(frame)

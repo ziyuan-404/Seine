@@ -4,7 +4,6 @@ import android.animation.Animator
 import android.animation.AnimatorListenerAdapter
 import android.animation.ValueAnimator
 import android.graphics.Canvas
-import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Point
 import android.graphics.Rect
@@ -16,7 +15,6 @@ import android.view.View
 import android.view.ViewTreeObserver
 import android.view.WindowManager
 import android.view.animation.LinearInterpolator
-import android.view.animation.PathInterpolator
 import android.widget.FrameLayout
 import hk.uwu.reareye.hook.scopes.subscreencenter.modules.rearwidget.NativeRearCardHost
 import hk.uwu.reareye.hook.scopes.subscreencenter.modules.rearwidget.NativeRearMotion
@@ -27,8 +25,8 @@ internal class RearFaceFeedback(context: android.content.Context) : View(context
     companion object {
         private const val TAG = "rear_face_camera_feedback"
         private const val CYCLE_MS = 1350L
-        private data class Layout(val visibility: Int, val background: Drawable?, val flags: Int?, val format: Int?, val blur: Int?)
-        private val layouts = java.util.WeakHashMap<View, Layout>()
+        private const val ENTRY_MS = 320L
+        private val panelVisibility = java.util.WeakHashMap<View, Int>()
         private val pending = java.util.IdentityHashMap<RearFaceFeedback, () -> Unit>()
         private val afterExit = mutableListOf<() -> Unit>()
         private var closing = false
@@ -57,89 +55,50 @@ internal class RearFaceFeedback(context: android.content.Context) : View(context
         }
 
         fun update(overlay: FrameLayout, scanning: Boolean, success: Boolean, application: Boolean,
-                   notificationAnchor: WeakReference<View>?) {
+                   notificationAnchor: View?) {
             if (scanning) closing = false
             val id = overlay.resources.getIdentifier("face_auth_card", "id", "com.xiaomi.subscreencenter")
             val panel = overlay.findViewById<View>(id) ?: return
             val feedback = overlay.findViewWithTag<RearFaceFeedback>(TAG)
             if (scanning || success) {
-                if (!layouts.containsKey(panel)) {
-                    val window = overlay.layoutParams as? WindowManager.LayoutParams
-                    layouts[panel] = Layout(panel.visibility,
-                        overlay.background?.constantState?.newDrawable()?.mutate() ?: overlay.background,
-                        window?.flags, window?.format, window?.blurBehindRadius)
-                    overlay.addOnAttachStateChangeListener(object : OnAttachStateChangeListener {
-                        override fun onViewAttachedToWindow(v: View) = Unit
-                        override fun onViewDetachedFromWindow(v: View) { layouts.remove(panel); v.removeOnAttachStateChangeListener(this) }
-                    })
-                }
+                panelVisibility.putIfAbsent(panel, panel.visibility)
                 panel.visibility = View.INVISIBLE
-                overlay.setBackgroundColor(if (application) 0x33000000 else Color.TRANSPARENT)
                 overlay.clipChildren = false
-                // Clear both Android and Xiaomi blur; clearing only the window flag
-                // leaves the ROM's view background blur active on a notification.
-                run {
-                    listOf("setMiBackgroundBlurMode", "setMiViewBlurMode", "setMiBackgroundBlurRadius").forEach { name ->
-                        runCatching { View::class.java.getMethod(name, Int::class.javaPrimitiveType).invoke(overlay, 0) }
-                    }
-                }
-                (overlay.layoutParams as? WindowManager.LayoutParams)?.let { window ->
-                    window.flags = (window.flags or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN).let {
-                        if (application) it or WindowManager.LayoutParams.FLAG_BLUR_BEHIND
-                        else it and WindowManager.LayoutParams.FLAG_BLUR_BEHIND.inv() and WindowManager.LayoutParams.FLAG_DIM_BEHIND.inv()
-                    }
-                    window.format = android.graphics.PixelFormat.TRANSLUCENT
-                    window.layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
-                    window.setFitInsetsTypes(0)
-                    window.setBlurBehindRadius(if (application) (24 * overlay.resources.displayMetrics.density).toInt() else 0)
-                    window.dimAmount = if (application) window.dimAmount else 0f
-                    if (overlay.isAttachedToWindow) overlay.context.getSystemService(WindowManager::class.java).updateViewLayout(overlay, window)
-                }
                 val current = feedback ?: RearFaceFeedback(overlay.context).also {
-                    it.tag = TAG; overlay.addView(it, FrameLayout.LayoutParams(-1, -1))
+                    it.tag = TAG
+                    it.inline = !application
+                    overlay.addView(it, FrameLayout.LayoutParams(-1, -1))
                 }
-                current.setRenderEffect(null)
-                listOf("setMiViewBlurMode", "setMiBackgroundBlurMode", "setMiBackgroundBlurRadius").forEach { name ->
-                    runCatching { View::class.java.getMethod(name, Int::class.javaPrimitiveType).invoke(current, 0) }
-                }
-                current.inline = !application
                 current.trackAnchor(notificationAnchor)
                 if (scanning) current.scan() else current.showSuccess()
-            } else if (!application) {
-                // Failure/retry stays beside the placeholder too. Restoring the
-                // native failure panel used to re-enable its full-window blur.
-                panel.visibility = View.INVISIBLE
-                feedback?.showFailure()
-                clearNotificationBlur(overlay)
-                overlay.setOnClickListener {
-                    val retryId = overlay.resources.getIdentifier("authen_retry", "id", "com.xiaomi.subscreencenter")
-                    overlay.findViewById<View>(retryId)?.takeIf { it.visibility == View.VISIBLE }?.performClick()
-                }
+            } else if (application) {
+                panelVisibility.remove(panel)?.let { panel.visibility = it }
+                feedback?.fadeOut { overlay.removeView(it) }
             } else {
-                // Native retry/no-enrollment text stays intact. Fade the camera
-                // indicator out instead of abruptly dropping its final frame.
-                val state = layouts.remove(panel)
-                val restore = {
-                    state?.let {
-                        panel.visibility = it.visibility; overlay.background = it.background
-                        (overlay.layoutParams as? WindowManager.LayoutParams)?.let { window ->
-                            it.flags?.let { flags -> window.flags = flags }; it.format?.let { format -> window.format = format }
-                            it.blur?.let(window::setBlurBehindRadius)
-                            if (overlay.isAttachedToWindow) overlay.context.getSystemService(WindowManager::class.java).updateViewLayout(overlay, window)
-                        }
-                    }
-                }
-                if (feedback != null) feedback.fadeOut { overlay.removeView(it); restore() } else restore()
+                feedback?.showFailure()
             }
         }
 
-        fun deferRemoval(overlay: FrameLayout, remove: () -> Unit): Boolean {
+        fun moveNotificationAnchor(overlay: FrameLayout, view: View) {
+            overlay.findViewWithTag<RearFaceFeedback>(TAG)?.trackAnchor(view)
+        }
+
+        fun isRetiring(overlay: FrameLayout): Boolean =
+            overlay.findViewWithTag<RearFaceFeedback>(TAG)?.retiring == true
+
+        fun retryNotification(overlay: FrameLayout) {
+            val retryId = overlay.resources.getIdentifier("authen_retry", "id", "com.xiaomi.subscreencenter")
+            overlay.findViewById<View>(retryId)?.takeIf { it.visibility == View.VISIBLE }?.performClick()
+        }
+
+        fun deferRemoval(overlay: FrameLayout, charging: Boolean, remove: () -> Unit): Boolean {
             if (closing || Looper.myLooper() != Looper.getMainLooper() ||
                 overlay.display?.displayId != 1 || overlay.display?.state != android.view.Display.STATE_ON || !overlay.isAttachedToWindow) return false
             val feedback = overlay.findViewWithTag<RearFaceFeedback>(TAG) ?: return false
             if (feedback.removalAllowed || !ValueAnimator.areAnimatorsEnabled()) return false
             if (feedback.retiring) return true
             val window = overlay.layoutParams as? WindowManager.LayoutParams ?: return false
+            if (charging) feedback.keepOnlyRing()
             // Native termination continues immediately. This tail cannot hold
             // keyboard focus, receive touches, or delay credential entry.
             window.flags = (window.flags or WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE) and
@@ -173,6 +132,12 @@ internal class RearFaceFeedback(context: android.content.Context) : View(context
             pending.clear()
         }
 
+        fun prepareChargingExit(): Boolean {
+            afterExit.clear()
+            pending.keys.forEach { it.keepOnlyRing() }
+            return pending.isNotEmpty()
+        }
+
         fun afterVisualExit(callback: () -> Unit) {
             if (pending.isEmpty()) callback() else afterExit.add(callback)
         }
@@ -189,6 +154,8 @@ internal class RearFaceFeedback(context: android.content.Context) : View(context
     private var inline = false
     private var anchor: WeakReference<View>? = null
     private var anchorObserver: ViewTreeObserver? = null
+    private var anchorAlpha = 1f
+    private var anchorEntry: ValueAnimator? = null
     private val anchorPreDraw = ViewTreeObserver.OnPreDrawListener {
         // The notification and face overlay have separate window roots.
         invalidate()
@@ -200,6 +167,7 @@ internal class RearFaceFeedback(context: android.content.Context) : View(context
     private val overlayLocation = IntArray(2)
     private var success = false
     private var retiring = false
+    private var ringOnly = false
     private var removalAllowed = false
     private val circle = RectF()
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { isDither = true }
@@ -286,6 +254,8 @@ internal class RearFaceFeedback(context: android.content.Context) : View(context
         success = false
         finishAnimator?.removeAllListeners(); finishAnimator?.cancel(); finishAnimator = null
         animate().cancel()
+        anchorEntry?.cancel()
+        anchorAlpha = 1f
         if (isAttachedToWindow && !retiring) {
             alpha = 0f
             glowAlpha = 1f
@@ -294,7 +264,7 @@ internal class RearFaceFeedback(context: android.content.Context) : View(context
             startedAt = SystemClock.uptimeMillis()
             scanFrame(0L)
             orbit.start()
-            animate().alpha(1f).setDuration(320L).setInterpolator(RearMotionCurves.content).start()
+            animate().alpha(1f).setDuration(ENTRY_MS).setInterpolator(RearMotionCurves.content).start()
         }
     }
 
@@ -310,6 +280,12 @@ internal class RearFaceFeedback(context: android.content.Context) : View(context
         successIcon?.callback = this
         (successIcon as? android.graphics.drawable.Animatable)?.start()
         // Finish the current complete revolution when native removal arrives.
+        invalidate()
+    }
+
+    private fun keepOnlyRing() {
+        ringOnly = true
+        (parent as? FrameLayout)?.let { clearNotificationBlur(it, passTouches = true) }
         invalidate()
     }
 
@@ -351,9 +327,12 @@ internal class RearFaceFeedback(context: android.content.Context) : View(context
                     if (inline) iconScale = .86f + .14f * iconAlpha
                 }
                 invalidate()
-                if (overlay != null && window != null && overlay.isAttachedToWindow) {
+                if (!ringOnly && overlay != null && window != null && overlay.isAttachedToWindow) {
                     val opacity=1f-RearMotionCurves.content.getInterpolation(t)
-                    if(!inline) overlay.setBackgroundColor(Color.argb((51*opacity).toInt(),0,0,0))
+                    if (!inline) runCatching {
+                        View::class.java.getMethod("setMiBackgroundBlurRadius", Int::class.javaPrimitiveType)
+                            .invoke(overlay, (initialBlur * opacity).toInt())
+                    }
                     window.setBlurBehindRadius((initialBlur * opacity).toInt())
                     runCatching { overlay.context.getSystemService(WindowManager::class.java).updateViewLayout(overlay, window) }
                 }
@@ -369,6 +348,7 @@ internal class RearFaceFeedback(context: android.content.Context) : View(context
 
     private fun cancelMotion() {
         orbit.cancel()
+        anchorEntry?.cancel(); anchorEntry = null
         finishAnimator?.removeAllListeners(); finishAnimator?.cancel(); finishAnimator = null
         animate().cancel()
         if (retiring) (parent as? View)?.animate()?.cancel()
@@ -382,12 +362,27 @@ internal class RearFaceFeedback(context: android.content.Context) : View(context
         glowRadius = radius + feather
     }
 
-    private fun trackAnchor(next: WeakReference<View>?) {
-        if (anchor === next) return
+    private fun trackAnchor(next: View?) {
+        val previous = anchor?.get()
+        if (previous === next && (next == null || anchorObserver?.isAlive == true)) return
         anchorObserver?.takeIf { it.isAlive }?.removeOnPreDrawListener(anchorPreDraw)
-        anchor = next
-        anchorObserver = next?.get()?.viewTreeObserver?.takeIf { it.isAlive }
+        anchor = next?.let(::WeakReference)
+        anchorObserver = next?.viewTreeObserver?.takeIf { it.isAlive }
         anchorObserver?.addOnPreDrawListener(anchorPreDraw)
+        if (previous != null && previous !== next && next != null && isAttachedToWindow && !retiring &&
+            ValueAnimator.areAnimatorsEnabled()) {
+            anchorEntry?.cancel()
+            anchorAlpha = 0f
+            anchorEntry = ValueAnimator.ofFloat(0f, 1f).apply {
+                duration = ENTRY_MS
+                interpolator = RearMotionCurves.content
+                addUpdateListener {
+                    anchorAlpha = it.animatedValue as Float
+                    invalidate()
+                }
+                start()
+            }
+        }
         invalidate()
     }
 
@@ -403,6 +398,7 @@ internal class RearFaceFeedback(context: android.content.Context) : View(context
         canvas.drawRect(circle.left - glowRadius, circle.top - glowRadius,
             circle.right + glowRadius, circle.bottom + glowRadius, paint)
         canvas.restore(); paint.shader = null; paint.alpha = 255
+        if (ringOnly) return
         val size = if (inline) 52f * scale else 112f * scale
         val x: Float
         val y: Float
@@ -439,7 +435,7 @@ internal class RearFaceFeedback(context: android.content.Context) : View(context
         fun Drawable.drawIcon() {
             val half = size * iconScale / 2f
             setBounds((x - half).toInt(), (y - half).toInt(), (x + half).toInt(), (y + half).toInt())
-            val opacity = (iconAlpha * 255).toInt().coerceIn(0, 255)
+            val opacity = (iconAlpha * anchorAlpha * 255).toInt().coerceIn(0, 255)
             if (inline) {
                 val spread = .6f * scale
                 val layer = canvas.saveLayerAlpha(x-half-spread, y-half-spread,

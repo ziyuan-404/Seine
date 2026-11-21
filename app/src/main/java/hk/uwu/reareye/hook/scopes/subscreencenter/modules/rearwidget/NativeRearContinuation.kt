@@ -124,6 +124,7 @@ internal object NativeRearContinuation {
 
     fun show(host: ViewGroup, prompt: View, footer: View?, card: View) {
         NativeRearMotion.flip(card) {
+            RearNotificationReveal.forget(host)
             footer?.visibility = View.GONE
             host.removeAllViews()
             host.addView(prompt, ViewGroup.LayoutParams(-1, -1))

@@ -40,7 +40,11 @@ internal fun MochiColorsConfigInput(
 ) {
     val type = item.type as ConfigType.EnumSingleSelect
     val revision = rememberRemotePrefsStatusRevision()
-    val mode = remember(revision) { prefs.getInt(ConfigKeys.MODULE_MOCHI_COLOR_MODE, -1) }
+    val mode = remember(revision) {
+        val defaultColorMode = if (prefs.prefs.contains(ConfigKeys.MODULE_THEME_MODE)) -1
+        else MochiColorSettings.DEFAULT_COLOR_MODE
+        prefs.getInt(ConfigKeys.MODULE_MOCHI_COLOR_MODE, defaultColorMode)
+    }
     val theme = AppThemeMode.fromValue(prefs.getInt(ConfigKeys.MODULE_THEME_MODE, AppThemeMode.default.value))
     val resolvedMode = MochiColorSettings(mode = mode).resolvedMode(theme)
     val currentMode = when (resolvedMode) {
@@ -87,8 +91,10 @@ internal fun MochiSeedConfigInput(
     val revision = rememberRemotePrefsStatusRevision()
     val theme = AppThemeMode.fromValue(prefs.getInt(ConfigKeys.MODULE_THEME_MODE, AppThemeMode.default.value))
     val settings = remember(revision, theme) {
+        val defaultColorMode = if (prefs.prefs.contains(ConfigKeys.MODULE_THEME_MODE)) -1
+        else MochiColorSettings.DEFAULT_COLOR_MODE
         MochiColorSettings(
-            mode = prefs.getInt(ConfigKeys.MODULE_MOCHI_COLOR_MODE, -1),
+            mode = prefs.getInt(ConfigKeys.MODULE_MOCHI_COLOR_MODE, defaultColorMode),
             palette = prefs.getInt(ConfigKeys.MODULE_MOCHI_PALETTE_STYLE, 0),
             seed = if (prefs.prefs.contains(ConfigKeys.MODULE_MOCHI_SEED_COLOR)) {
                 prefs.getInt(ConfigKeys.MODULE_MOCHI_SEED_COLOR, 0)
