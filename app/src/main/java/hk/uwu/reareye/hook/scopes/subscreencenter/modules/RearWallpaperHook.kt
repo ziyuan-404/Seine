@@ -339,6 +339,7 @@ class RearWallpaperHook : RoxyHooker() {
                     hostContext = application.applicationContext ?: application
                     registerHookBootstrapReceiver()
                     recoverExistingHostState()
+                    repairImportedDirectoryPermissions()
                     refreshSchedule(forceApply = true)
                 }
             }
@@ -710,6 +711,38 @@ class RearWallpaperHook : RoxyHooker() {
             if (mainPanel != null || mainHandler != null) return true
         }
         return mainPanel != null || mainHandler != null
+    }
+
+    /**
+     * Repair permissions on imported wallpaper directories left by older REAREye versions.
+     * Only direct REAREye import directories under this user's rearScreen root are touched.
+     */
+    private fun PackageScope.repairImportedDirectoryPermissions() {
+        val root = resolveRuntimeRoot().canonicalFile
+        val directories = readRuntimeRecords()
+            .asSequence()
+            .filter { it.imported }
+            .flatMap { record ->
+                sequenceOf(
+                    record.resLocalPath,
+                    record.metaPath,
+                    record.metaSnapshotPath,
+                ).filterNotNull().mapNotNull { File(it).parentFile }
+            }
+            .distinctBy { it.absolutePath }
+
+        directories.forEach { directory ->
+            runCatching {
+                val canonical = directory.canonicalFile
+                if (canonical.parentFile != root ||
+                    !canonical.name.startsWith(IMPORT_RES_PREFIX) ||
+                    !canonical.isDirectory
+                ) {
+                    return@runCatching
+                }
+                ensureReadableRecursive(canonical)
+            }.onFailure(YLog::warn)
+        }
     }
 
     private fun PackageScope.refreshSchedule(forceApply: Boolean) {
@@ -2237,6 +2270,7 @@ class RearWallpaperHook : RoxyHooker() {
                         error = "failed to create runtime dir"
                     )
                 }
+                ensureDirectoryPermissions777(targetDir)
 
                 val packageSize = copyParcelFileDescriptorToFileLimited(sourceFd, packageFile)
                 validateMamlPackage(packageFile)
@@ -2276,9 +2310,9 @@ class RearWallpaperHook : RoxyHooker() {
                     updatedAt = now,
                     values = metadataValues,
                 )
+                ensureReadableRecursive(targetDir)
                 runtimeArray.put(item)
                 writeRuntimeArray(runtimeUpdate, runtimeArray)
-                ensureReadableRecursive(targetDir)
                 refreshRuntimePanels()
                 debugLog(
                     "importWallpaperPackageInternal success resId=$resId applyId=$applyId targetDir=${targetDir.absolutePath} previewPath=$previewPath"
@@ -2333,6 +2367,9 @@ class RearWallpaperHook : RoxyHooker() {
                     ?.takeIf { it.isNotBlank() }
                     ?.let(::File)
                     ?: File(packageFile.parentFile, "${record.resId}.mrm")
+                val targetDir = metadataFile.parentFile ?: packageFile.parentFile
+                    ?: return@synchronized operationResult(false, error = "runtime dir is missing")
+                ensureDirectoryPermissions777(targetDir)
                 val previewPath = previewUri
                     ?.takeIf { it.isNotBlank() }
                     ?.let(Uri::parse)
@@ -2369,8 +2406,8 @@ class RearWallpaperHook : RoxyHooker() {
                     previewPath = previewPath,
                     values = values,
                 )
-                writeRuntimeArray(runtimeUpdate, runtimeArray)
                 ensureReadableRecursive(metadataFile.parentFile ?: metadataFile)
+                writeRuntimeArray(runtimeUpdate, runtimeArray)
                 refreshRuntimePanels()
                 operationResult(true, wallpaperId = wallpaperId)
             }
@@ -2429,6 +2466,7 @@ class RearWallpaperHook : RoxyHooker() {
                 val targetDir = metadataFile.parentFile
                     ?: packageFile.parentFile
                     ?: return@synchronized operationResult(false, error = "runtime dir is missing")
+                ensureDirectoryPermissions777(targetDir)
                 val updatePackageFile = File(targetDir, "${packageFile.name}.update")
 
                 try {
@@ -2486,8 +2524,8 @@ class RearWallpaperHook : RoxyHooker() {
                     )
                     item.put("resLocalPath", packageFile.absolutePath)
                     item.put("resSnapshotPath", packageFile.absolutePath)
-                    writeRuntimeArray(runtimeUpdate, runtimeArray)
                     ensureReadableRecursive(targetDir)
+                    writeRuntimeArray(runtimeUpdate, runtimeArray)
                     refreshRuntimePanels()
                     operationResult(true, wallpaperId = wallpaperId)
                 } finally {
@@ -2530,8 +2568,11 @@ class RearWallpaperHook : RoxyHooker() {
                     ?.takeIf { it.isNotBlank() }
                     ?.let(::File)
                     ?: File(packageFile.parentFile, "${record.resId}.mrm")
+                val targetDir = metadataFile.parentFile ?: packageFile.parentFile
+                    ?: return@synchronized operationResult(false, error = "runtime dir is missing")
+                ensureDirectoryPermissions777(targetDir)
                 val previewFile = File(
-                    metadataFile.parentFile ?: packageFile.parentFile,
+                    targetDir,
                     "preview_generated_${System.currentTimeMillis()}.jpg",
                 )
                 debugLog(
@@ -2557,8 +2598,8 @@ class RearWallpaperHook : RoxyHooker() {
                     previewPath = previewPath,
                     values = values,
                 )
-                writeRuntimeArray(runtimeUpdate, runtimeArray)
                 ensureReadableRecursive(metadataFile.parentFile ?: metadataFile)
+                writeRuntimeArray(runtimeUpdate, runtimeArray)
                 refreshRuntimePanels()
                 debugLog(
                     "generateWallpaperPreviewInternal success wallpaperId=$wallpaperId previewPath=$previewPath metadata=${metadataFile.absolutePath}"
@@ -2687,10 +2728,13 @@ class RearWallpaperHook : RoxyHooker() {
                     )
                 )
                 val configFile = resolveTemplateConfigFile(record)
+                val configDir = configFile.parentFile
+                    ?: return@synchronized operationResult(false, error = "runtime dir is missing")
+                ensureDirectoryPermissions777(configDir)
                 writeTextAtomically(configFile, normalizedConfig)
                 item.put("mamlEditConfigPath", configFile.absolutePath)
-                writeRuntimeArray(runtimeUpdate, runtimeArray)
                 ensureReadableRecursive(configFile.parentFile ?: configFile)
+                writeRuntimeArray(runtimeUpdate, runtimeArray)
                 refreshRuntimePanels()
                 debugLog(
                     "saveWallpaperTemplateConfig success wallpaperId=$wallpaperId template=$templatePath config=${configFile.absolutePath} size=${normalizedConfig.length}"
@@ -3865,11 +3909,27 @@ class RearWallpaperHook : RoxyHooker() {
 
     private fun PackageScope.ensureReadableRecursive(file: File) {
         if (file.isDirectory) {
-            ensureReadable(file)
-            file.listFiles()?.forEach({ ensureReadableRecursive(it) })
+            ensureDirectoryPermissions777(file)
+            file.listFiles()?.forEach { ensureReadableRecursive(it) }
             return
         }
         ensureReadable(file)
+    }
+
+    @SuppressLint("SetWorldReadable", "SetWorldWritable", "SetWorldExecutable")
+    private fun PackageScope.ensureDirectoryPermissions777(directory: File) {
+        check(directory.isDirectory) {
+            "Cannot set 0777 permissions: not a directory: ${directory.absolutePath}"
+        }
+        check(directory.setReadable(true, false)) {
+            "Cannot set 0777 read permissions: ${directory.absolutePath}"
+        }
+        check(directory.setWritable(true, false)) {
+            "Cannot set 0777 write permissions: ${directory.absolutePath}"
+        }
+        check(directory.setExecutable(true, false)) {
+            "Cannot set 0777 execute permissions: ${directory.absolutePath}"
+        }
     }
 
     @SuppressLint("SetWorldReadable")
