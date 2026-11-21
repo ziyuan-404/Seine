@@ -54,16 +54,10 @@ This fork continues development on [REAREye](https://github.com/killerprojecte/R
 - **Display adjustments** bring together equivalent DPI, display bounds, corner radius, timeout and per-app compatibility, with draggable bounds, sliders and previews of the display region and corners.
 - **App security** supports face verification before opening rear-screen apps.
 - **Notification cards and charging** adapt notification order to rear-screen paging, filter the system’s “More notifications” entry, and add charging effects and screen-on display options.
+- **Leica Camera module integration** When Seine detects the companion Leica Camera module, it uses the Leica red halo as the initial rear-screen charging animation. A manually selected style takes precedence.
 - **Recorder and timer cards** adapt recording, stopwatch and countdown scenarios using the HyperOS 4 design language.
 - **Backup and restore** support JSON files and clipboard import and export.
 - **Compatibility and performance** improvements reduce repeated initialization, load app catalogs asynchronously, reuse configuration components, and control rendering through Mochi graphics quality.
-
-### What's new in 2.0.3
-
-- **In-app updates** The Mochi update sheet opens when Home finds a newer release. You can also select **About → Check for updates**. The sheet shows the installed and latest versions, the release notes, and download progress. The APK is saved to Downloads and opens through the system installer.
-- **Rear-screen previews** Settings includes animated previews for the app list, navigation, recording, notifications, and charging. Display settings bring together the display region, DPI, corner radius, and per-app compatibility.
-- **Interface animations** The Home menu and bottom navigation use animated Morphicons. The About page shows version information and includes the update entry.
-- **Focus notifications** Rear-screen focus notifications are enabled by default. You can turn them off in Settings.
 
 ## Screenshots
 
