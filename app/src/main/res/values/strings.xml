@@ -591,6 +591,8 @@
     <string name="home_update_unknown">Unknown</string>
     <string name="home_update_warning_title">Update available</string>
     <string name="home_update_warning_desc">Current %1$s, latest %2$s</string>
+    <string name="home_update_view_release">View release</string>
+    <string name="home_update_later">Later</string>
     <string name="home_root_warning_title">Root unavailable</string>
     <string name="home_root_warning_desc">Some features require root privileges. Please grant this application root privileges using your root manager</string>
     <string name="module_version_label">Module Version</string>

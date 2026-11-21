@@ -591,6 +591,8 @@
     <string name="home_update_unknown">未知</string>
     <string name="home_update_warning_title">发现版本更新</string>
     <string name="home_update_warning_desc">当前 %1$s，最新 %2$s</string>
+    <string name="home_update_view_release">查看更新</string>
+    <string name="home_update_later">稍后</string>
     <string name="home_root_warning_title">Root 不可用</string>
     <string name="home_root_warning_desc">部分功能依赖 Root 权限， 请在Root管理器中授予本应用Root权限</string>
     <string name="module_version_label">模块版本</string>

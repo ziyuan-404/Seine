@@ -434,6 +434,8 @@ class MainActivity : ComponentActivity() {
                                                     "home" -> Box(modifier = Modifier.fillMaxSize()) {
                                                         HomeScreen(
                                                             bottomInnerPadding = stableBottomInset,
+                                                            canShowUpdatePrompt = !featureGuideVisible &&
+                                                                currentScreen == "home" && rootNavigator.current == "main",
                                                             onOpenSponsor = {
                                                                 sponsorHeroState.triggerOpen()
                                                                 rootNavigator.push("support", from = SPONSOR_NAV_SOURCE_KEY)

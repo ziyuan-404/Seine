@@ -106,10 +106,18 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import top.yukonga.miuix.kmp.theme.MiuixTheme
+import ui.feice.mochi.basic.MochiButton
+import ui.feice.mochi.basic.MochiButtonStyle
 import ui.feice.mochi.basic.MochiDropdown
 import ui.feice.mochi.basic.MochiDropdownDefaults
 import ui.feice.mochi.basic.MochiItem
+import ui.feice.mochi.basic.MochiSheet
+import ui.feice.mochi.basic.MochiSheetContent
+import ui.feice.mochi.basic.MochiSheetDetent
+import ui.feice.mochi.basic.MochiSheetHeader
+import ui.feice.mochi.basic.MochiSheetState
 import ui.feice.mochi.basic.Text
+import ui.feice.mochi.basic.rememberMochiSheetState
 import ui.feice.mochi.icons.MochiIonicon
 import ui.feice.mochi.list.MochiListCard
 import ui.feice.mochi.list.MochiListDefaults
@@ -131,6 +139,7 @@ private object UpdateInfoCache {
     val lock = Mutex()
     var latestRelease: SeineRelease? = null
     var islandShownInSession: Boolean = false
+    var promptedReleaseTag: String? = null
 }
 
 private class ToastHolder {
@@ -261,6 +270,7 @@ private fun decodeFrameToken(index: Int): String {
 @Composable
 fun HomeScreen(
     bottomInnerPadding: Dp = 0.dp,
+    canShowUpdatePrompt: Boolean = true,
     onOpenSponsor: () -> Unit = {},
 ) {
     val context = LocalContext.current
@@ -272,7 +282,9 @@ fun HomeScreen(
     val coroutineScope = rememberCoroutineScope()
     val easterEggToastHolder = remember { ToastHolder() }
     var latestRelease by remember { mutableStateOf<SeineRelease?>(UpdateInfoCache.latestRelease) }
-    var isCheckingUpdate by remember { mutableStateOf(false) }
+    val availableUpdate = latestRelease?.takeIf { it.isNewerThan(SeineProject.CURRENT_RELEASE) }
+    val updateSheet = rememberMochiSheetState(detents = listOf(MochiSheetDetent.Medium))
+    var isCheckingUpdate by remember { mutableStateOf(true) }
     var showUpdateIsland by remember { mutableStateOf(false) }
     val playLaunchAnimation = remember { !HomeLaunchAnimationState.hasPlayed }
     var hasRootAccess by remember { mutableStateOf<Boolean?>(null) }
@@ -336,6 +348,15 @@ fun HomeScreen(
             showUpdateIsland = false
         }
         isCheckingUpdate = false
+    }
+
+    LaunchedEffect(availableUpdate, isCheckingUpdate, canShowUpdatePrompt) {
+        if (canShowUpdatePrompt && !isCheckingUpdate && availableUpdate != null &&
+            UpdateInfoCache.promptedReleaseTag != availableUpdate.tag
+        ) {
+            updateSheet.show()
+            UpdateInfoCache.promptedReleaseTag = availableUpdate.tag
+        }
     }
 
     LaunchedEffect(Unit) {
@@ -577,6 +598,44 @@ fun HomeScreen(
                         },
                     )
                 }
+            }
+        }
+    }
+
+    if (availableUpdate != null) {
+        UpdatePromptSheet(updateSheet, availableUpdate)
+    }
+}
+
+@Composable
+private fun UpdatePromptSheet(state: MochiSheetState, release: SeineRelease) {
+    val context = LocalContext.current
+    MochiSheet(state = state) {
+        MochiSheetHeader(title = stringResource(R.string.home_update_warning_title))
+        MochiSheetContent {
+            Text(
+                stringResource(
+                    R.string.home_update_warning_desc,
+                    SeineProject.CURRENT_RELEASE.removePrefix("v"),
+                    release.tag.removePrefix("v"),
+                ),
+                color = MochiTheme.colorScheme.onSurfaceVariant,
+            )
+            MochiButton(
+                onClick = {
+                    state.hide()
+                    context.startActivity(Intent(Intent.ACTION_VIEW, release.url.toUri()))
+                },
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(stringResource(R.string.home_update_view_release))
+            }
+            MochiButton(
+                onClick = state::hide,
+                modifier = Modifier.fillMaxWidth(),
+                style = MochiButtonStyle.Tonal,
+            ) {
+                Text(stringResource(R.string.home_update_later))
             }
         }
     }
