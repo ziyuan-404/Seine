@@ -9,13 +9,15 @@ import hk.uwu.reareye.utils.RootHelper.hasRootAccess
 
 object DeviceConfigTools {
 
-    // 我就说我设备名字怎么就对不上了，这玩意还要 Root 获取，破烂
-    val getdevice =
-        if (hasRootAccess()) executeRootCommand("getprop persist.private.device_name") else Pair(
-            20,
+    // Avoid running blocking root shell commands at class initialization.
+    val deviceName: String by lazy {
+        if (hasRootAccess()) {
+            val result = executeRootCommand("getprop persist.private.device_name")
+            if (result.first == 0) result.second else "No Root Permission"
+        } else {
             "No Root Permission"
-        )
-    val deviceName = if (getdevice.first == 0) getdevice.second else "No Root Permission"
+        }
+    }
 
 
     val androidVersion: String = getSystemProperties("ro.build.version.release")

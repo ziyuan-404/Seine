@@ -70,6 +70,10 @@ import hk.uwu.reareye.ui.components.config.SceneRouteManagerScreen
 import hk.uwu.reareye.ui.components.config.buildMoreCategories
 import hk.uwu.reareye.ui.components.config.rememberRearWallpaperManagerState
 import hk.uwu.reareye.ui.components.config.template.RearWallpaperTemplateConfigScreen
+import hk.uwu.reareye.ui.components.motion.RearAppListPreviewCard
+import hk.uwu.reareye.ui.components.motion.RearChargingPreviewsCard
+import hk.uwu.reareye.ui.components.motion.RearEnhancementPreviewsCard
+import hk.uwu.reareye.ui.components.motion.RearNotificationPreviewsCard
 import hk.uwu.reareye.ui.components.script.ScriptManagementScreen
 import hk.uwu.reareye.ui.config.ConfigCategory
 import hk.uwu.reareye.ui.config.ConfigGroup
@@ -174,7 +178,9 @@ fun ConfigScreen(
     var moreSearchQuery by rememberSaveable { mutableStateOf("") }
     var pendingMoreSearchCategory by remember { mutableStateOf<ConfigCategory?>(null) }
     val currentRoute = routeStack.last()
-    val isOverlayMode = currentRoute.isOverlayRoute()
+    LaunchedEffect(currentRoute) {
+        onAppListModeChange(currentRoute != ConfigRoute.Root)
+    }
     val animatedRoute = remember(currentRoute, routeStack.size) {
         ConfigAnimatedRoute(
             route = currentRoute,
@@ -202,14 +208,7 @@ fun ConfigScreen(
 
     fun navigateBack() {
         if (routeStack.size <= 1) return
-        val leavingOverlay = routeStack.last().isOverlayRoute()
         routeStack = routeStack.dropLast(1)
-        if (leavingOverlay && !routeStack.last().isOverlayRoute()) {
-            routeScope.launch {
-                delay(OVERLAY_ROUTE_EXIT_DURATION_MS)
-                if (!routeStack.last().isOverlayRoute()) onAppListModeChange(false)
-            }
-        }
     }
 
     val backMotion = remember { PredictiveBackMotionTracker() }
@@ -466,32 +465,36 @@ fun ConfigScreen(
                 val pageBottom = paddingValues.calculateBottomPadding() + bottomInnerPadding
                 val moreCategory = moreCategories.firstOrNull { it.category.key == route.category.key }
                 if (route.category.titleRes == R.string.rear_app_settings_title) {
+                    val displaySection = remember(moreCategory) {
+                        moreCategory?.sections.orEmpty().firstOrNull { section ->
+                            section.children.any { it.key == ConfigKeys.CFG_REAR_APP_DISPLAY }
+                        }
+                    }
+                    val displaySettings = remember(displaySection) {
+                        displaySection?.children.orEmpty().filterNot {
+                            it.key == ConfigKeys.CFG_REAR_APP_DISPLAY
+                        }
+                    }
+                    val extraSections = remember(moreCategory, displaySection) {
+                        moreCategory?.sections.orEmpty().filter { it !== displaySection }
+                    }
                     RearAppDisplayManagerScreen(
                         prefsManager = prefsManager,
                         onBack = ::navigateBack,
                         embedded = true,
                         bottomPadding = pageBottom,
-                        extraSettings = {
-                            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                                moreCategory?.sections.orEmpty()
-                                    .filterNot { section ->
-                                        section.children.any { it.key == ConfigKeys.CFG_REAR_APP_DISPLAY }
-                                    }
-                                    .forEach { section ->
-                                        MochiListCard {
-                                            section.children.forEach { node ->
-                                                ConfigNodeRow(
-                                                    node = node,
-                                                    prefsManager = prefsManager,
-                                                    onOpenCategory = {},
-                                                    onOpenAppList = { openOverlayRoute(ConfigRoute.AppList(it)) },
-                                                    onOpenManager = { openManagerItem(it) },
-                                                    onPreferenceChanged = handlePreferenceChanged,
-                                                )
-                                            }
-                                        }
-                                    }
-                            }
+                        headerContent = { RearAppListPreviewCard() },
+                        displaySettings = displaySettings,
+                        extraSections = extraSections,
+                        renderNode = { node ->
+                            ConfigNodeRow(
+                                node = node,
+                                prefsManager = prefsManager,
+                                onOpenCategory = {},
+                                onOpenAppList = { openOverlayRoute(ConfigRoute.AppList(it)) },
+                                onOpenManager = { openManagerItem(it) },
+                                onPreferenceChanged = handlePreferenceChanged,
+                            )
                         },
                     )
                 } else {
@@ -512,6 +515,12 @@ fun ConfigScreen(
                         onOpenBackup = if (moreCategory?.group?.id == "reareye_settings") {
                             { routeStack = routeStack + ConfigRoute.Backup }
                         } else null,
+                        headerContent = when (moreCategory?.group?.id) {
+                            "rear_enhancement" -> { { RearEnhancementPreviewsCard() } }
+                            "notifications_route" -> { { RearNotificationPreviewsCard() } }
+                            "charging" -> { { RearChargingPreviewsCard() } }
+                            else -> null
+                        },
 
                     )
                 }
@@ -732,6 +741,7 @@ private fun ConfigNodeList(
     onOpenManager: (ConfigItem) -> Unit,
     onPreferenceChanged: (ConfigItem) -> Unit = {},
     onOpenBackup: (() -> Unit)? = null,
+    headerContent: (@Composable () -> Unit)? = null,
 ) {
     val renderNode: @Composable (ConfigNode) -> Unit = { node ->
         ConfigNodeRow(
@@ -743,13 +753,16 @@ private fun ConfigNodeList(
             onPreferenceChanged = onPreferenceChanged,
         )
     }
-    val sections = nodes.map { node ->
-        if (node is ConfigGroup) {
-            node.titleRes?.let { stringResource(it) } to node.children
-        } else {
-            null to listOf(node)
+    val sections = remember(nodes) {
+        nodes.map { node ->
+            if (node is ConfigGroup) {
+                node.titleRes to node.children
+            } else {
+                null to listOf(node)
+            }
         }
     }
+    val sectionHeaders = sections.map { (res, _) -> res?.let { stringResource(it) } }
     val spacing = 12.dp
     CompositionLocalProvider(LocalMochiListItemSpacing provides spacing) {
         ProvideMochiOverscroll {
@@ -764,6 +777,11 @@ private fun ConfigNodeList(
                 verticalArrangement = Arrangement.spacedBy(spacing),
                 flingBehavior = MochiScrollDefaults.flingBehavior(),
             ) {
+                if (headerContent != null) {
+                    item(key = "category_feature_preview") {
+                        headerContent()
+                    }
+                }
                 if (onOpenBackup != null) {
                     mochiListSection("backup_restore") {
                         row {
@@ -777,7 +795,8 @@ private fun ConfigNodeList(
                     }
                 }
                 sections.forEachIndexed { index, section ->
-                    val (header, entries) = section
+                    val (_, entries) = section
+                    val header = sectionHeaders[index]
                     mochiListSection(entries.firstOrNull()?.key ?: "node_" + index, header = header) {
                         rows(entries.size, key = { entries[it].key ?: it }) { childIndex ->
                             renderNode(entries[childIndex])

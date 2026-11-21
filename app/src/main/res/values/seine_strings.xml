@@ -1,6 +1,22 @@
 <resources>
     <string name="seine_rear_enhancement_title">Rear screen enhancements</string>
-    <string name="seine_rear_enhancement_desc">App access, keyboard, face authentication and rear launcher layout</string>
+    <string name="seine_rear_enhancement_desc">Immersive navigation, recorder card, lock behavior and rear interactions</string>
+    <string name="seine_section_display_region">Display region preview</string>
+    <string name="seine_section_display_bounds">Bounds, DPI, camera fill and corners</string>
+    <string name="seine_section_app_list_launch">Rear app list and launcher</string>
+    <string name="seine_section_app_interaction">Unlock and screen timeout</string>
+    <string name="seine_section_app_compat">Activity whitelist and compatibility</string>
+    <string name="seine_rear_app_preview_caption">Open apps on the rear screen</string>
+    <string name="seine_home_module_version">Seine version</string>
+    <string name="seine_about_check_update">Check for updates</string>
+    <string name="seine_about_up_to_date">Up to date (%1$s)</string>
+    <string name="seine_about_update_found">Update %1$s available, tap to view</string>
+    <string name="seine_about_check_failed">Update check failed, tap to open Releases</string>
+    <string name="seine_section_lock_back">Lock screen and proximity</string>
+    <string name="seine_section_double_tap_load">Double-tap and high-load control</string>
+    <string name="seine_section_notify_mirror">Rear notification cards and popups</string>
+    <string name="seine_section_notify_focus">Focus notices and scene routing</string>
+    <string name="seine_section_process_keep">Background retention and compatibility</string>
     <string name="seine_support_title">Buy the author a coffee</string>
     <string name="seine_support_summary">Support the continued development of Seine</string>
     <string name="seine_support_alipay">Alipay</string>

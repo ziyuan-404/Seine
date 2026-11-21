@@ -7,16 +7,19 @@ import android.hardware.display.DisplayManager
 import android.view.RoundedCorner
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -38,9 +41,15 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import ui.feice.mochi.list.MochiListCard
+import ui.feice.mochi.effect.overscroll.MochiScrollDefaults
+import ui.feice.mochi.effect.overscroll.ProvideMochiOverscroll
+import ui.feice.mochi.list.LocalMochiListItemSpacing
+import ui.feice.mochi.list.MochiListRow
+import ui.feice.mochi.list.mochiListSection
+import ui.feice.mochi.list.rows
 import ui.feice.mochi.navigation.MochiBackButton
 import ui.feice.mochi.navigation.MochiTitleBar
 import ui.feice.mochi.basic.MochiButton
@@ -48,9 +57,12 @@ import ui.feice.mochi.basic.MochiButtonDefaults
 import ui.feice.mochi.basic.MochiButtonStyle
 import ui.feice.mochi.icons.MochiIonicon
 import ui.feice.mochi.theme.LocalContentColor
+import ui.feice.mochi.theme.MochiDefaults
 import ui.feice.mochi.theme.MochiTheme
 import hk.uwu.reareye.R
+import hk.uwu.reareye.ui.config.ConfigGroup
 import hk.uwu.reareye.ui.config.ConfigKeys
+import hk.uwu.reareye.ui.config.ConfigNode
 import hk.uwu.reareye.ui.config.RearAppDefaults
 import hk.uwu.reareye.ui.config.PrefsManager
 import kotlinx.coroutines.delay
@@ -122,7 +134,10 @@ fun RearAppDisplayManagerScreen(
     onBack: () -> Unit,
     embedded: Boolean = false,
     bottomPadding: Dp = 0.dp,
-    extraSettings: (@Composable () -> Unit)? = null,
+    headerContent: (@Composable () -> Unit)? = null,
+    displaySettings: List<ConfigNode> = emptyList(),
+    extraSections: List<ConfigGroup> = emptyList(),
+    renderNode: (@Composable (ConfigNode) -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val geometry = remember(context) { RearDisplayGeometry.read(context) }
@@ -153,144 +168,259 @@ fun RearAppDisplayManagerScreen(
         }
         unavailable = true
     }
-    Scaffold(topBar = {
-        if (!embedded) MochiTitleBar(
-            title = stringResource(R.string.rear_app_display_title),
-            navigationIcon = {
-                MochiBackButton(onClick = onBack)
-            },
-        )
-    }) { padding ->
-        LazyColumn(
-            modifier = Modifier.fillMaxSize().padding(horizontal = ConfigUi.HorizontalInset),
-            contentPadding = PaddingValues(top = (if (embedded) 0.dp else padding.calculateTopPadding()) + 12.dp,
-                bottom = (if (embedded) bottomPadding else padding.calculateBottomPadding()) + 24.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            if (!loaded) {
-                item { Text(stringResource(if (unavailable) R.string.rear_app_region_unavailable else R.string.rear_app_region_loading)) }
-            } else {
-                item {
-                    Text(stringResource(R.string.rear_app_region_hint),
-                        color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
-                }
-                item {
-                    RearDisplayRegionPreview(region, geometry, rounded, radius) {
-                        region = it
-                        automatic = false
-                    }
-                }
-                item {
-                    Text(stringResource(if (automatic) R.string.rear_app_region_auto else R.string.rear_app_region_custom))
-                    Text(stringResource(R.string.rear_app_region_coordinates,
-                        region.left * 100f, region.top * 100f, region.right * 100f, region.bottom * 100f),
-                        color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
-                }
-                item {
-                    MochiListCard {
-                        Column(
-                            modifier = Modifier.padding(RegionSliderInsets),
-                            verticalArrangement = Arrangement.spacedBy(RegionSliderSpacing),
-                        ) {
-                            RegionEdgeSlider(R.string.rear_app_region_left, region.left,
-                                limits.left..maxOf(limits.left, region.right - MIN_REGION_SIZE)) {
-                                region = region.copy(left = it); automatic = false
-                            }
-                            RegionEdgeSlider(R.string.rear_app_region_top, region.top,
-                                limits.top..maxOf(limits.top, region.bottom - MIN_REGION_SIZE)) {
-                                region = region.copy(top = it); automatic = false
-                            }
-                            RegionEdgeSlider(R.string.rear_app_region_right, region.right,
-                                minOf(limits.right, region.left + MIN_REGION_SIZE)..limits.right) {
-                                region = region.copy(right = it); automatic = false
-                            }
-                            RegionEdgeSlider(R.string.rear_app_region_bottom, region.bottom,
-                                minOf(limits.bottom, region.top + MIN_REGION_SIZE)..limits.bottom) {
-                                region = region.copy(bottom = it); automatic = false
-                            }
+
+    val previewHeader = stringResource(R.string.seine_section_display_region)
+    val boundsHeader = stringResource(R.string.seine_section_display_bounds)
+    val extraHeaders = extraSections.map { group -> group.titleRes?.let { stringResource(it) } }
+
+    @Composable
+    fun DisplayManagerList(topInset: Dp, bottomInset: Dp) {
+        val spacing = 12.dp
+        CompositionLocalProvider(LocalMochiListItemSpacing provides spacing) {
+            ProvideMochiOverscroll {
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(MochiDefaults.groupedBackground()),
+                    contentPadding = PaddingValues(
+                        start = ConfigUi.HorizontalInset,
+                        end = ConfigUi.HorizontalInset,
+                        top = topInset + 8.dp,
+                        bottom = bottomInset + 16.dp,
+                    ),
+                    verticalArrangement = Arrangement.spacedBy(spacing),
+                    flingBehavior = MochiScrollDefaults.flingBehavior(),
+                ) {
+                    if (headerContent != null) {
+                        item(key = "rear_app_list_preview") {
+                            headerContent()
                         }
                     }
-                }
-                item {
-                    MochiListCard {
-                        ConfigSwitchRow(title = stringResource(R.string.rear_app_camera_fill),
-                            summary = stringResource(R.string.rear_app_camera_fill_desc),
-                            checked = cameraFill, onCheckedChange = { cameraFill = it })
-                    }
-                }
-                item {
-                    MochiListCard {
-                        ConfigSwitchRow(title = stringResource(R.string.rear_app_rounded),
-                            checked = rounded, onCheckedChange = { rounded = it })
-                        if (rounded) {
-                            ConfigSwitchRow(title = stringResource(R.string.rear_app_corner_auto),
-                                checked = radius == 0f,
-                                onCheckedChange = { radius = if (it) 0f else RearAppDefaults.CORNER_RADIUS })
-                            if (radius > 0f) {
-                                DisplayAdjustmentSlider(
-                                    title = stringResource(R.string.rear_app_corner_radius, radius.roundToInt()),
-                                    value = radius,
-                                    range = 1f..180f,
-                                    modifier = Modifier.padding(RegionSliderInsets),
-                                    onChange = { radius = it.roundToInt().toFloat() },
+
+                    if (!loaded) {
+                        mochiListSection("region_loading", header = previewHeader) {
+                            row {
+                                MochiListRow(
+                                    title = stringResource(
+                                        if (unavailable) R.string.rear_app_region_unavailable
+                                        else R.string.rear_app_region_loading,
+                                    ),
                                 )
                             }
                         }
+                    } else {
+                        mochiListSection("region_preview", header = previewHeader) {
+                            row(key = "preview_canvas") {
+                                Column(
+                                    modifier = Modifier.padding(RegionSliderInsets),
+                                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                                ) {
+                                    RearDisplayRegionPreview(region, geometry, rounded, radius) {
+                                        region = it
+                                        automatic = false
+                                    }
+                                    Text(
+                                        text = stringResource(if (automatic) R.string.rear_app_region_auto else R.string.rear_app_region_custom),
+                                        style = MochiTheme.textStyles.labelLarge,
+                                        color = MochiTheme.colorScheme.onSurface,
+                                    )
+                                    Text(
+                                        text = stringResource(
+                                            R.string.rear_app_region_coordinates,
+                                            region.left * 100f,
+                                            region.top * 100f,
+                                            region.right * 100f,
+                                            region.bottom * 100f,
+                                        ),
+                                        style = MochiTheme.textStyles.bodySmall,
+                                        color = MochiTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                    Text(
+                                        text = stringResource(R.string.rear_app_region_hint),
+                                        style = MochiTheme.textStyles.bodySmall,
+                                        color = MochiTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                            }
+                        }
+
+                        mochiListSection("region_bounds", header = boundsHeader) {
+                            row(key = "edge_sliders") {
+                                Column(
+                                    modifier = Modifier.padding(RegionSliderInsets),
+                                    verticalArrangement = Arrangement.spacedBy(RegionSliderSpacing),
+                                ) {
+                                    RegionEdgeSlider(
+                                        R.string.rear_app_region_left,
+                                        region.left,
+                                        limits.left..maxOf(limits.left, region.right - MIN_REGION_SIZE),
+                                    ) {
+                                        region = region.copy(left = it); automatic = false
+                                    }
+                                    RegionEdgeSlider(
+                                        R.string.rear_app_region_top,
+                                        region.top,
+                                        limits.top..maxOf(limits.top, region.bottom - MIN_REGION_SIZE),
+                                    ) {
+                                        region = region.copy(top = it); automatic = false
+                                    }
+                                    RegionEdgeSlider(
+                                        R.string.rear_app_region_right,
+                                        region.right,
+                                        minOf(limits.right, region.left + MIN_REGION_SIZE)..limits.right,
+                                    ) {
+                                        region = region.copy(right = it); automatic = false
+                                    }
+                                    RegionEdgeSlider(
+                                        R.string.rear_app_region_bottom,
+                                        region.bottom,
+                                        minOf(limits.bottom, region.top + MIN_REGION_SIZE)..limits.bottom,
+                                    ) {
+                                        region = region.copy(bottom = it); automatic = false
+                                    }
+                                }
+                            }
+                            row(key = "camera_fill") {
+                                ConfigSwitchRow(
+                                    title = stringResource(R.string.rear_app_camera_fill),
+                                    summary = stringResource(R.string.rear_app_camera_fill_desc),
+                                    checked = cameraFill,
+                                    onCheckedChange = { cameraFill = it },
+                                )
+                            }
+                            row(key = "rounded") {
+                                ConfigSwitchRow(
+                                    title = stringResource(R.string.rear_app_rounded),
+                                    checked = rounded,
+                                    onCheckedChange = { rounded = it },
+                                )
+                            }
+                            if (rounded) {
+                                row(key = "corner_auto") {
+                                    ConfigSwitchRow(
+                                        title = stringResource(R.string.rear_app_corner_auto),
+                                        checked = radius == 0f,
+                                        onCheckedChange = { radius = if (it) 0f else RearAppDefaults.CORNER_RADIUS },
+                                    )
+                                }
+                                if (radius > 0f) {
+                                    row(key = "corner_radius") {
+                                        DisplayAdjustmentSlider(
+                                            title = stringResource(R.string.rear_app_corner_radius, radius.roundToInt()),
+                                            value = radius,
+                                            range = 1f..180f,
+                                            modifier = Modifier.padding(RegionSliderInsets),
+                                            onChange = { radius = it.roundToInt().toFloat() },
+                                        )
+                                    }
+                                }
+                            }
+                            if (renderNode != null && displaySettings.isNotEmpty()) {
+                                rows(displaySettings.size, key = { displaySettings[it].key ?: "display_setting_$it" }) { idx ->
+                                    renderNode(displaySettings[idx])
+                                }
+                            }
+                            row(key = "region_actions") {
+                                Column(
+                                    modifier = Modifier.padding(RegionSliderInsets),
+                                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                                ) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                    ) {
+                                        MochiButton(
+                                            onClick = {
+                                                region = defaultRegion
+                                                automatic = false
+                                                rounded = true
+                                                radius = RearAppDefaults.CORNER_RADIUS
+                                                cameraFill = false
+                                            },
+                                            style = MochiButtonStyle.Tonal,
+                                            modifier = Modifier.weight(1f),
+                                        ) {
+                                            MochiIonicon("refresh", size = 16.dp, tint = LocalContentColor.current)
+                                            Text(
+                                                text = stringResource(R.string.rear_app_region_reset),
+                                                color = LocalContentColor.current,
+                                                maxLines = 1,
+                                                softWrap = false,
+                                                overflow = TextOverflow.Ellipsis,
+                                            )
+                                        }
+                                        MochiButton(
+                                            onClick = {
+                                                prefsManager.prefs.edit()
+                                                    .putString(ConfigKeys.REAR_APP_REGION, if (automatic) "" else region.encode())
+                                                    .putBoolean(ConfigKeys.REAR_APP_ROUNDED, rounded)
+                                                    .putBoolean(ConfigKeys.REAR_APP_CAMERA_FILL, cameraFill)
+                                                    .putFloat(ConfigKeys.REAR_APP_CORNER_RADIUS, radius)
+                                                    .apply()
+                                                Toast.makeText(context, R.string.rear_app_region_saved, Toast.LENGTH_SHORT).show()
+                                                if (!embedded) onBack()
+                                            },
+                                            colors = MochiButtonDefaults.colors(MochiButtonStyle.Filled).copy(
+                                                container = MiuixTheme.colorScheme.primary,
+                                                content = MiuixTheme.colorScheme.onPrimary,
+                                            ),
+                                            modifier = Modifier.weight(1f),
+                                        ) {
+                                            MochiIonicon("checkmark", size = 16.dp, tint = LocalContentColor.current)
+                                            Text(
+                                                text = stringResource(R.string.rear_app_region_save),
+                                                color = LocalContentColor.current,
+                                                maxLines = 1,
+                                                softWrap = false,
+                                                overflow = TextOverflow.Ellipsis,
+                                            )
+                                        }
+                                    }
+                                    Text(
+                                        text = stringResource(R.string.rear_app_region_unsaved),
+                                        style = MochiTheme.textStyles.bodySmall,
+                                        color = MochiTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                            }
+                        }
                     }
-                }
-                item(key = "region_actions") {
-                    ConfigCard {
-                        Column(
-                            modifier = Modifier.padding(12.dp),
-                            verticalArrangement = Arrangement.spacedBy(10.dp),
-                        ) {
-                            MochiButton(
-                                onClick = {
-                                    region = defaultRegion
-                                    automatic = false
-                                    rounded = true
-                                    radius = RearAppDefaults.CORNER_RADIUS
-                                    cameraFill = false
-                                },
-                                style = MochiButtonStyle.Outlined,
-                                modifier = Modifier.fillMaxWidth(),
-                            ) {
-                                MochiIonicon("refresh", size = 16.dp, tint = LocalContentColor.current)
-                                Text(stringResource(R.string.rear_app_region_reset), color = LocalContentColor.current)
+
+                    if (renderNode != null) {
+                        extraSections.forEachIndexed { index, group ->
+                            val entries = group.children
+                            if (entries.isNotEmpty()) {
+                                mochiListSection(
+                                    entries.firstOrNull()?.key ?: "extra_section_$index",
+                                    header = extraHeaders[index],
+                                ) {
+                                    rows(entries.size, key = { entries[it].key ?: it }) { childIndex ->
+                                        renderNode(entries[childIndex])
+                                    }
+                                }
                             }
-                            MochiButton(
-                                onClick = {
-                                    prefsManager.prefs.edit()
-                                        .putString(ConfigKeys.REAR_APP_REGION, if (automatic) "" else region.encode())
-                                        .putBoolean(ConfigKeys.REAR_APP_ROUNDED, rounded)
-                                        .putBoolean(ConfigKeys.REAR_APP_CAMERA_FILL, cameraFill)
-                                        .putFloat(ConfigKeys.REAR_APP_CORNER_RADIUS, radius)
-                                        .apply()
-                                    Toast.makeText(context, R.string.rear_app_region_saved, Toast.LENGTH_SHORT).show()
-                                    if (!embedded) onBack()
-                                },
-                                colors = MochiButtonDefaults.colors(MochiButtonStyle.Filled).copy(
-                                    container = MiuixTheme.colorScheme.primary,
-                                    content = MiuixTheme.colorScheme.onPrimary,
-                                ),
-                                modifier = Modifier.fillMaxWidth(),
-                            ) {
-                                MochiIonicon("checkmark", size = 16.dp, tint = LocalContentColor.current)
-                                Text(stringResource(R.string.rear_app_region_save), color = LocalContentColor.current)
-                            }
-                            Text(
-                                text = stringResource(R.string.rear_app_region_unsaved),
-                                style = MiuixTheme.textStyles.footnote1,
-                                color = MochiTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.padding(horizontal = 4.dp),
-                            )
                         }
                     }
                 }
             }
-            if (extraSettings != null) {
-                item(key = "application_settings") { extraSettings() }
-            }
+        }
+    }
+
+    if (embedded) {
+        DisplayManagerList(topInset = 0.dp, bottomInset = bottomPadding)
+    } else {
+        Scaffold(topBar = {
+            MochiTitleBar(
+                title = stringResource(R.string.rear_app_display_title),
+                navigationIcon = {
+                    MochiBackButton(onClick = onBack)
+                },
+            )
+        }) { padding ->
+            DisplayManagerList(
+                topInset = padding.calculateTopPadding(),
+                bottomInset = padding.calculateBottomPadding(),
+            )
         }
     }
 }

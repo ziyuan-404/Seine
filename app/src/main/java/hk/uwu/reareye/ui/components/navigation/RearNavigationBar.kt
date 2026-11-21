@@ -97,6 +97,9 @@ import com.kyant.backdrop.shadow.InnerShadow
 import com.kyant.backdrop.shadow.Shadow
 import com.kyant.capsule.ContinuousCapsule
 import hk.uwu.reareye.R
+import hk.uwu.reareye.ui.components.motion.MorphAboutIcon
+import hk.uwu.reareye.ui.components.motion.MorphConfigIcon
+import hk.uwu.reareye.ui.components.motion.MorphHomeIcon
 import hk.uwu.reareye.ui.config.ConfigType
 import hk.uwu.reareye.ui.config.ModuleNavigationBarMode
 import kotlinx.collections.immutable.toPersistentList
@@ -198,10 +201,20 @@ fun RearNavigationBar(
             MochiTabItem(
                 label = destination.label,
                 selectedIcon = { tint ->
-                    MochiIonicon(destination.icon, style = MochiIconStyle.Filled, tint = tint, size = 22.dp)
+                    when (destination.route) {
+                        HOME_ROUTE -> MorphHomeIcon(selected = true, tint = tint, size = 22.dp)
+                        CONFIG_ROUTE -> MorphConfigIcon(selected = true, tint = tint, size = 22.dp)
+                        ABOUT_ROUTE -> MorphAboutIcon(selected = true, tint = tint, size = 22.dp)
+                        else -> MochiIonicon(destination.icon, style = MochiIconStyle.Filled, tint = tint, size = 22.dp)
+                    }
                 },
             ) { tint ->
-                MochiIonicon(destination.icon, style = MochiIconStyle.Outline, tint = tint, size = 22.dp)
+                when (destination.route) {
+                    HOME_ROUTE -> MorphHomeIcon(selected = false, tint = tint, size = 22.dp)
+                    CONFIG_ROUTE -> MorphConfigIcon(selected = false, tint = tint, size = 22.dp)
+                    ABOUT_ROUTE -> MorphAboutIcon(selected = false, tint = tint, size = 22.dp)
+                    else -> MochiIonicon(destination.icon, style = MochiIconStyle.Outline, tint = tint, size = 22.dp)
+                }
             }
         }.toPersistentList()
     }

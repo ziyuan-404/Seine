@@ -1,6 +1,22 @@
 <resources>
     <string name="seine_rear_enhancement_title">妙享背屏增强</string>
-    <string name="seine_rear_enhancement_desc">背屏应用白名单、键盘、人脸验证与应用栏布局</string>
+    <string name="seine_rear_enhancement_desc">沉浸式导航、录音卡片、锁屏返回与背屏交互行为</string>
+    <string name="seine_section_display_region">显示区域预览</string>
+    <string name="seine_section_display_bounds">显示范围、DPI 与圆角</string>
+    <string name="seine_section_app_list_launch">背屏应用列表与启动</string>
+    <string name="seine_section_app_interaction">解锁与亮屏控制</string>
+    <string name="seine_section_app_compat">活动白名单与兼容</string>
+    <string name="seine_rear_app_preview_caption">在背屏打开应用</string>
+    <string name="seine_home_module_version">Seine 版本</string>
+    <string name="seine_about_check_update">检查更新</string>
+    <string name="seine_about_up_to_date">已是最新版本 %1$s</string>
+    <string name="seine_about_update_found">发现新版本 %1$s，点击查看</string>
+    <string name="seine_about_check_failed">检查更新失败，点击打开 Releases</string>
+    <string name="seine_section_lock_back">锁屏与遮挡交互</string>
+    <string name="seine_section_double_tap_load">双击手势与高负载</string>
+    <string name="seine_section_notify_mirror">背屏卡片与弹窗通知</string>
+    <string name="seine_section_notify_focus">焦点通知与场景路由</string>
+    <string name="seine_section_process_keep">后台保活与进程兼容</string>
     <string name="seine_support_title">助力作者买Lo裙</string>
     <string name="seine_support_summary">支持 Seine 背屏继续打磨</string>
     <string name="seine_support_alipay">支付宝</string>

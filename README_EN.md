@@ -58,6 +58,13 @@ This fork continues development on [REAREye](https://github.com/killerprojecte/R
 - **Backup and restore** support JSON files and clipboard import and export.
 - **Compatibility and performance** improvements reduce repeated initialization, load app catalogs asynchronously, reuse configuration components, and control rendering through Mochi graphics quality.
 
+### What's new in 2.0.3
+
+- **In-app updates** The Mochi update sheet opens when Home finds a newer release. You can also select **About → Check for updates**. The sheet shows the installed and latest versions, the release notes, and download progress. The APK is saved to Downloads and opens through the system installer.
+- **Rear-screen previews** Settings includes animated previews for the app list, navigation, recording, notifications, and charging. Display settings bring together the display region, DPI, corner radius, and per-app compatibility.
+- **Interface animations** The Home menu and bottom navigation use animated Morphicons. The About page shows version information and includes the update entry.
+- **Focus notifications** Rear-screen focus notifications are enabled by default. You can turn them off in Settings.
+
 ## Screenshots
 
 On-device screenshots from this fork. Click an image to view it at full size.
@@ -112,6 +119,18 @@ On-device screenshots from this fork. Click an image to view it at full size.
     </td>
   </tr>
 </table>
+
+### Feature demos in Settings
+
+These animations are for illustration only. Actual behavior may vary.
+
+| Launching rear-screen apps | Immersive navigation | Recorder card |
+| --- | --- | --- |
+| ![Rear app list, face verification, and app launch](./docs/images/settings-rear-app-launch.gif) | ![Rear-screen immersive navigation](./docs/images/settings-rear-navigation.gif) | ![Rear-screen recorder card](./docs/images/settings-rear-recorder.gif) |
+| **Notification card** | **Notification pop-up** | **MRSS liquid charging** |
+| ![Rear-screen notification card](./docs/images/settings-rear-notification-card.gif) | ![Rear-screen notification pop-up](./docs/images/settings-rear-notification-popup.gif) | ![MRSS liquid charging](./docs/images/settings-rear-charging-mrss.gif) |
+| **Soft glow and wave** | **Leica red halo** | **Leica green halo** |
+| ![Soft glow and wave charging](./docs/images/settings-rear-charging-glow.gif) | ![Leica red halo charging](./docs/images/settings-rear-charging-leica-red.gif) | ![Leica green halo charging](./docs/images/settings-rear-charging-leica-green.gif) |
 
 ## Main Features
 

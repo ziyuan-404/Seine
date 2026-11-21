@@ -46,18 +46,21 @@ internal val MoreConfigGroups = listOf(
         sections = listOf(
             listOf(
                 ConfigKeys.REAR_APP_ENABLED,
-                ConfigKeys.ACTIVITIES_WHITELIST_APPS,
-                ConfigKeys.HOOK_ACTIVITIES_WHITELIST,
-                ConfigKeys.ALLOW_ALL_ACTIVITIES,
-                ConfigKeys.ALLOW_EXTERNAL_DISPLAY_LAUNCH,
-            ),
-            listOf(
                 ConfigKeys.REAR_APP_FACE_AUTH,
                 ConfigKeys.REAR_APP_FACE_AUTH_STYLE,
-            ),
-            listOf(
                 ConfigKeys.REAR_APP_HOME_STYLE,
                 ConfigKeys.REAR_APP_ORDER_MODE,
+                ConfigKeys.REAR_SCREEN_TIMEOUT_SECONDS,
+            ),
+            listOf(
+                ConfigKeys.HOOK_SKIP_LOCK_BACK_HOME,
+                ConfigKeys.SUBSCREEN_LOCK_BACK_HOME_WHITELIST_APPS,
+                ConfigKeys.HOOK_DISABLE_REAR_SCREEN_COVER,
+            ),
+            listOf(
+                ConfigKeys.SUBSCREEN_DOUBLE_TAP_SLEEP_DISABLED_APPS,
+                ConfigKeys.SUBSCREEN_DOUBLE_TAP_WAKE_DISABLED_APPS,
+                ConfigKeys.SUBSCREEN_HIGH_LOAD_MODE_DISABLED_APPS,
             ),
         ),
     ),
@@ -67,12 +70,36 @@ internal val MoreConfigGroups = listOf(
         descriptionRes = R.string.rear_app_settings_desc,
         icon = Icons.Rounded.Apps,
         sections = listOf(
-            listOf(ConfigKeys.CFG_REAR_APP_DISPLAY),
             listOf(
+                ConfigKeys.CFG_REAR_APP_DISPLAY,
                 ConfigKeys.REAR_APP_DPI,
+            ),
+            listOf(
+                ConfigKeys.ACTIVITIES_WHITELIST_APPS,
+                ConfigKeys.HOOK_UNLIMITED_SUBSCREEN_APP_LIST,
+                ConfigKeys.HOOK_ACTIVITIES_WHITELIST,
+                ConfigKeys.ALLOW_EXTERNAL_DISPLAY_LAUNCH,
                 ConfigKeys.CFG_CUSTOM_BOUNDS_COMPAT_MANAGER,
             ),
-            listOf(ConfigKeys.REAR_SCREEN_TIMEOUT_SECONDS),
+        ),
+    ),
+    MoreConfigGroup(
+        id = "notifications_route",
+        titleRes = R.string.config_more_notifications_route_title,
+        descriptionRes = R.string.config_more_notifications_route_desc,
+        icon = Icons.Rounded.NotificationsActive,
+        sections = listOf(
+            listOf(
+                ConfigKeys.REAR_NOTIFICATION_SYNC,
+                ConfigKeys.REAR_NOTIFICATION_SYNC_APPS,
+                ConfigKeys.REAR_NOTIFICATION_PRIVACY,
+                ConfigKeys.REAR_NOTIFICATION_FACE_AUTH_STYLE,
+                ConfigKeys.REAR_NOTIFICATION_GLASS,
+            ),
+            listOf(
+                ConfigKeys.HOOK_ALLOW_REAR_FOCUS_NOTICES,
+                ConfigKeys.CFG_REAR_WIDGET_SCENE_ROUTE_MANAGER,
+            ),
         ),
     ),
     MoreConfigGroup(
@@ -85,35 +112,7 @@ internal val MoreConfigGroups = listOf(
                 ConfigKeys.HOOK_BACKGROUND_WHITELIST,
                 ConfigKeys.BACKGROUND_WHITELIST_APPS,
                 ConfigKeys.BACKGROUND_LOCK_APPS,
-            ),
-            listOf(
-                ConfigKeys.HOOK_SKIP_LOCK_BACK_HOME,
-                ConfigKeys.SUBSCREEN_LOCK_BACK_HOME_WHITELIST_APPS,
-            ),
-            listOf(
-                ConfigKeys.SUBSCREEN_DOUBLE_TAP_SLEEP_DISABLED_APPS,
-                ConfigKeys.SUBSCREEN_DOUBLE_TAP_WAKE_DISABLED_APPS,
-            ),
-            listOf(ConfigKeys.HOOK_DISABLE_REAR_SCREEN_COVER),
-            listOf(ConfigKeys.SUBSCREEN_HIGH_LOAD_MODE_DISABLED_APPS),
-        ),
-    ),
-    MoreConfigGroup(
-        id = "notifications_route",
-        titleRes = R.string.config_more_notifications_route_title,
-        descriptionRes = R.string.config_more_notifications_route_desc,
-        icon = Icons.Rounded.NotificationsActive,
-        sections = listOf(
-            listOf(
-                ConfigKeys.REAR_NOTIFICATION_SYNC,
-                ConfigKeys.REAR_NOTIFICATION_PRIVACY,
-                ConfigKeys.REAR_NOTIFICATION_FACE_AUTH_STYLE,
-                ConfigKeys.REAR_NOTIFICATION_SYNC_APPS,
-                ConfigKeys.REAR_NOTIFICATION_GLASS,
-            ),
-            listOf(
-                ConfigKeys.CFG_REAR_WIDGET_SCENE_ROUTE_MANAGER,
-                ConfigKeys.HOOK_ALLOW_REAR_FOCUS_NOTICES,
+                ConfigKeys.MISC_HOOK_TOP_RESUMED_FIX,
             ),
         ),
     ),
@@ -178,7 +177,6 @@ internal val MoreConfigGroups = listOf(
         icon = Icons.Rounded.LockOpen,
         sections = listOf(
             listOf(
-                ConfigKeys.HOOK_UNLIMITED_SUBSCREEN_APP_LIST,
                 ConfigKeys.HOOK_UNLOCK_VIDEO_RESTRICTIONS,
                 ConfigKeys.HOOK_UNLOCK_TEMPLATE_MAXIMUM_LIMIT,
             ),
@@ -194,7 +192,6 @@ internal val MoreConfigGroups = listOf(
         descriptionRes = R.string.config_more_gallery_weather_desc,
         icon = Icons.Rounded.Tune,
         sections = listOf(
-            listOf(ConfigKeys.MISC_HOOK_TOP_RESUMED_FIX),
             listOf(
                 ConfigKeys.WEATHER_DEVICE_LEVEL,
                 ConfigKeys.WEATHER_UNLOCK_SUPER_BLUR,
@@ -252,6 +249,13 @@ internal data class MoreCategory(val group: MoreConfigGroup, val category: Confi
         group.sections.map { keys ->
             ConfigGroup(
                 titleRes = when (keys.first()) {
+                    ConfigKeys.REAR_APP_ENABLED -> R.string.seine_section_app_interaction
+                    ConfigKeys.ACTIVITIES_WHITELIST_APPS -> R.string.seine_section_app_list_launch
+                    ConfigKeys.HOOK_SKIP_LOCK_BACK_HOME -> R.string.seine_section_lock_back
+                    ConfigKeys.SUBSCREEN_DOUBLE_TAP_SLEEP_DISABLED_APPS -> R.string.seine_section_double_tap_load
+                    ConfigKeys.REAR_NOTIFICATION_SYNC -> R.string.seine_section_notify_mirror
+                    ConfigKeys.HOOK_ALLOW_REAR_FOCUS_NOTICES -> R.string.seine_section_notify_focus
+                    ConfigKeys.HOOK_BACKGROUND_WHITELIST -> R.string.seine_section_process_keep
                     ConfigKeys.WEATHER_DEVICE_LEVEL -> R.string.category_weather
                     ConfigKeys.GALLERY_BACKUP_SERVER -> R.string.category_gallery
                     else -> null

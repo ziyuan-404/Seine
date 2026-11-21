@@ -52,6 +52,13 @@
 - **备份与恢复**支持 JSON 文件和剪贴板导入导出。
 - **兼容性与性能**减少重复初始化，异步加载应用目录，统一复用配置组件，并按 Mochi 画质档位控制渲染开销。
 
+### 2.0.3 新功能
+
+- **应用内更新** 首页发现更高版本时会打开 Mochi 底部面板，也可在「关于 → 检查更新」手动检查。面板展示当前版本、最新版本和更新日志，并显示实际下载进度。APK 保存到系统下载目录，完成后可从系统安装器继续安装。
+- **背屏功能预览** 设置页加入可切换的动画预览，覆盖应用列表、导航、录音、通知和充电。应用显示设置集中提供显示范围、DPI、圆角和逐应用兼容选项。
+- **界面动效** 首页菜单和底部导航使用 Morphicons 切换动画。「关于」页加入版本信息和更新入口。
+- **焦点通知** 背屏焦点通知默认开启，可在设置中关闭。
+
 ## 效果展示
 
 以下为本分支的实机展示，点击图片可查看原图。
@@ -106,6 +113,18 @@
     </td>
   </tr>
 </table>
+
+### 设置页功能演示
+
+示意动画仅供参考，具体以实际效果为准。
+
+| 背屏应用启动 | 沉浸式导航 | 录音卡片 |
+| --- | --- | --- |
+| ![背屏应用列表、人脸验证和应用启动](./docs/images/settings-rear-app-launch.gif) | ![背屏沉浸式导航](./docs/images/settings-rear-navigation.gif) | ![背屏录音卡片](./docs/images/settings-rear-recorder.gif) |
+| **通知卡片** | **弹窗通知** | **MRSS 液体充电** |
+| ![背屏通知卡片](./docs/images/settings-rear-notification-card.gif) | ![背屏弹窗通知](./docs/images/settings-rear-notification-popup.gif) | ![MRSS 液体充电](./docs/images/settings-rear-charging-mrss.gif) |
+| **柔光光晕与波浪** | **徕卡红色光晕** | **徕卡绿色光晕** |
+| ![柔光光晕与波浪充电](./docs/images/settings-rear-charging-glow.gif) | ![徕卡红色光晕充电](./docs/images/settings-rear-charging-leica-red.gif) | ![徕卡绿色光晕充电](./docs/images/settings-rear-charging-leica-green.gif) |
 
 ## 主要功能
 

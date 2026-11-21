@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="rear_app_settings_title">背屏应用与调节</string>
-    <string name="rear_app_settings_desc">调整显示区域、DPI、亮屏时长与逐应用兼容设置。</string>
+    <string name="rear_app_settings_desc">背屏应用列表、打开应用白名单、显示区域、DPI 与人脸验证。</string>
     <string name="rear_app_enabled">启用妙享背屏增强</string>
     <string name="rear_app_enabled_desc">为背屏应用白名单中的应用启用界面缩放、背屏键盘与导航手势。先选择要使用的应用，再从背屏应用列表打开。</string>
     <string name="rear_app_dpi">应用内容大小（等效 DPI）</string>
@@ -43,7 +43,7 @@
     <string name="rear_app_region_hint" formatted="false">拖动蓝色区域移动位置，拖动左侧白点调整边界。启用圆角时，左上和左下各用两个白点标出圆角两端；右边界可用下方滑块调整。</string>
     <string name="rear_app_region_auto">自动避让摄像头</string>
     <string name="rear_app_region_custom">自定义显示区域</string>
-    <string name="rear_app_region_reset">恢复默认显示区域</string>
+    <string name="rear_app_region_reset">恢复默认</string>
     <string name="rear_app_region_save">保存并应用</string>
     <string name="rear_app_region_saved">显示区域设置已保存</string>
     <string name="rear_app_region_left">左边界</string>

@@ -70,7 +70,6 @@ import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.core.net.toUri
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -85,6 +84,8 @@ import hk.uwu.reareye.ui.components.config.ConfigUi
 import hk.uwu.reareye.ui.components.motion.FlowMixCardEntrance
 import hk.uwu.reareye.ui.components.motion.HomeLaunchAnimationState
 import hk.uwu.reareye.ui.components.motion.MaterialExpressiveLoadingIndicator
+import hk.uwu.reareye.ui.components.motion.MorphTopMenuIcon
+import hk.uwu.reareye.ui.components.update.UpdatePromptSheet
 import hk.uwu.reareye.ui.config.RearAppDefaults
 import hk.uwu.reareye.ui.config.RearNotificationDefaults
 import hk.uwu.reareye.ui.config.rememberRemotePrefsStatusRevision
@@ -98,31 +99,24 @@ import hk.uwu.reareye.ui.theme.AppThemeMode
 import hk.uwu.reareye.utils.RootHelper
 import hk.uwu.reareye.version.SeineProject
 import hk.uwu.reareye.version.SeineRelease
+import hk.uwu.reareye.version.UpdateInfoCache
 import kotlinx.collections.immutable.toPersistentList
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import top.yukonga.miuix.kmp.theme.MiuixTheme
-import ui.feice.mochi.basic.MochiButton
-import ui.feice.mochi.basic.MochiButtonStyle
 import ui.feice.mochi.basic.MochiDropdown
 import ui.feice.mochi.basic.MochiDropdownDefaults
 import ui.feice.mochi.basic.MochiItem
-import ui.feice.mochi.basic.MochiSheet
-import ui.feice.mochi.basic.MochiSheetContent
 import ui.feice.mochi.basic.MochiSheetDetent
-import ui.feice.mochi.basic.MochiSheetHeader
-import ui.feice.mochi.basic.MochiSheetState
 import ui.feice.mochi.basic.Text
 import ui.feice.mochi.basic.rememberMochiSheetState
 import ui.feice.mochi.icons.MochiIonicon
 import ui.feice.mochi.list.MochiListCard
 import ui.feice.mochi.list.MochiListDefaults
 import ui.feice.mochi.list.MochiListRow
-import ui.feice.mochi.list.MochiListSection
 import ui.feice.mochi.navigation.LocalMochiBottomBarInset
 import ui.feice.mochi.navigation.MochiLazyCompactTitleScaffold
 import ui.feice.mochi.shape.MochiCapsule
@@ -134,13 +128,6 @@ private val HomeComponentPackages = listOf(
     R.string.seine_home_assistant_version to "com.miui.personalassistant",
     R.string.seine_home_themes_version to "com.android.thememanager",
 )
-
-private object UpdateInfoCache {
-    val lock = Mutex()
-    var latestRelease: SeineRelease? = null
-    var islandShownInSession: Boolean = false
-    var promptedReleaseTag: String? = null
-}
 
 private class ToastHolder {
     var toast: Toast? = null
@@ -388,10 +375,6 @@ fun HomeScreen(
     val revision = rememberRemotePrefsStatusRevision()
     var counts by remember { mutableStateOf<Pair<Int, Int>?>(null) }
     var framework by remember { mutableStateOf<String?>(null) }
-    val systemVersion = remember {
-        DeviceConfigTools.getSystemProperties("ro.mi.os.version.incremental")
-            .ifBlank { android.os.Build.VERSION.INCREMENTAL }
-    }
     val componentVersions by produceState<Map<Int, String?>>(emptyMap(), context) {
         value = withContext(Dispatchers.IO) {
             HomeComponentPackages.associate { (label, packageName) ->
@@ -568,11 +551,14 @@ fun HomeScreen(
                     }
                 }
             }
-            val systemInfoIndex = nextSectionIndex++
+            val systemInfoIndex = nextSectionIndex
             item(key = "system_info") {
                 FlowMixCardEntrance(index = systemInfoIndex, playAnimation = playLaunchAnimation) {
                     ConfigCard {
-                        MochiListRow(stringResource(R.string.seine_home_system_version), subtitle = systemVersion)
+                        MochiListRow(
+                            stringResource(R.string.seine_home_module_version),
+                            subtitle = SeineProject.CURRENT_RELEASE.removePrefix("v"),
+                        )
                         HomeComponentPackages.forEach { (label, _) ->
                             MochiListRow(stringResource(label), subtitle = componentVersions[label] ?: "—")
                         }
@@ -580,23 +566,10 @@ fun HomeScreen(
                 }
             }
 
-            val supportIndex = nextSectionIndex++
+            val supportIndex = nextSectionIndex + 1
             item(key = "support_seine") {
                 FlowMixCardEntrance(index = supportIndex, playAnimation = playLaunchAnimation) {
                     SeineSupportCard(onOpenSponsor)
-                }
-            }
-            val updateIndex = nextSectionIndex
-            item(key = "version_update") {
-                FlowMixCardEntrance(index = updateIndex, playAnimation = playLaunchAnimation) {
-                    UpdateInfoCard(
-                        currentVersion = SeineProject.CURRENT_RELEASE.removePrefix("v"),
-                        latestVersion = latestRelease?.tag,
-                        checking = isCheckingUpdate,
-                        onOpenReleases = {
-                            context.startActivity(Intent(Intent.ACTION_VIEW, SeineProject.RELEASES.toUri()))
-                        },
-                    )
                 }
             }
         }
@@ -604,40 +577,6 @@ fun HomeScreen(
 
     if (availableUpdate != null) {
         UpdatePromptSheet(updateSheet, availableUpdate)
-    }
-}
-
-@Composable
-private fun UpdatePromptSheet(state: MochiSheetState, release: SeineRelease) {
-    val context = LocalContext.current
-    MochiSheet(state = state) {
-        MochiSheetHeader(title = stringResource(R.string.home_update_warning_title))
-        MochiSheetContent {
-            Text(
-                stringResource(
-                    R.string.home_update_warning_desc,
-                    SeineProject.CURRENT_RELEASE.removePrefix("v"),
-                    release.tag.removePrefix("v"),
-                ),
-                color = MochiTheme.colorScheme.onSurfaceVariant,
-            )
-            MochiButton(
-                onClick = {
-                    state.hide()
-                    context.startActivity(Intent(Intent.ACTION_VIEW, release.url.toUri()))
-                },
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text(stringResource(R.string.home_update_view_release))
-            }
-            MochiButton(
-                onClick = state::hide,
-                modifier = Modifier.fillMaxWidth(),
-                style = MochiButtonStyle.Tonal,
-            ) {
-                Text(stringResource(R.string.home_update_later))
-            }
-        }
     }
 }
 
@@ -770,9 +709,8 @@ private fun HomeTopActionIslandButton(
                     },
                     contentAlignment = Alignment.Center,
                 ) {
-                    MochiIonicon(
-                        "ellipsis-horizontal",
-                        contentDescription = stringResource(R.string.config_tab_more),
+                    MorphTopMenuIcon(
+                        expanded = expanded && !checkingUpdate,
                         tint = animatedContent,
                     )
                 }
@@ -1043,28 +981,6 @@ private fun HomeNotice(
             onClick = onClick,
             chevron = onClick != null,
             colors = noticeColors,
-        )
-    }
-}
-
-@Composable
-private fun UpdateInfoCard(
-    currentVersion: String,
-    latestVersion: String?,
-    checking: Boolean,
-    onOpenReleases: () -> Unit,
-) {
-    MochiListSection(header = stringResource(R.string.home_update_title)) {
-        MochiListRow(stringResource(R.string.home_update_current), subtitle = currentVersion)
-        MochiListRow(
-            stringResource(R.string.home_update_latest),
-            subtitle = when {
-                checking -> stringResource(R.string.home_update_checking)
-                latestVersion == null -> stringResource(R.string.home_update_unknown)
-                else -> latestVersion
-            },
-            onClick = onOpenReleases,
-            chevron = true,
         )
     }
 }

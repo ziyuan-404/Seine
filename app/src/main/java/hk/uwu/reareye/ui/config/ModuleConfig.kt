@@ -479,11 +479,6 @@ val REAREyeConfig = listOf(
                         type = ConfigType.BooleanVal(defaultValue = true)
                     ),
                     ConfigItem(
-                        key = ConfigKeys.ALLOW_ALL_ACTIVITIES,
-                        titleRes = R.string.allow_all_activities,
-                        type = ConfigType.BooleanVal(defaultValue = false)
-                    ),
-                    ConfigItem(
                         key = ConfigKeys.ALLOW_EXTERNAL_DISPLAY_LAUNCH,
                         titleRes = R.string.allow_external_display_launch,
                         descriptionRes = R.string.allow_external_display_launch_desc,
@@ -604,7 +599,7 @@ val REAREyeConfig = listOf(
                         key = ConfigKeys.HOOK_ALLOW_REAR_FOCUS_NOTICES,
                         titleRes = R.string.allow_rear_focus_notices,
                         descriptionRes = R.string.allow_rear_focus_notices_desc,
-                        type = ConfigType.BooleanVal(defaultValue = false),
+                        type = ConfigType.BooleanVal(defaultValue = true),
                     ),
                     ConfigItem(
                         key = ConfigKeys.REAR_NOTIFICATION_SYNC,

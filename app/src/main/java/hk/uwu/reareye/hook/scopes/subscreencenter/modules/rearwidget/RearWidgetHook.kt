@@ -3016,7 +3016,7 @@ class RearWidgetHook : RoxyHooker() {
     }
 
     private fun PackageScope.allowSelfDescribedNotificationPackage(runnable: Any) {
-        if (!hookPrefs.getBoolean(ConfigKeys.HOOK_ALLOW_REAR_FOCUS_NOTICES, false)) return
+        if (!hookPrefs.getBoolean(ConfigKeys.HOOK_ALLOW_REAR_FOCUS_NOTICES, true)) return
         val snapshot = synchronized(postRunnableSnapshots) {
             postRunnableSnapshots[runnable]
         } ?: return

@@ -2,6 +2,7 @@ package hk.uwu.reareye.ui.screen
 
 import android.content.Intent
 import android.graphics.BitmapFactory
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.annotation.DrawableRes
 import androidx.annotation.StringRes
@@ -53,6 +54,7 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -85,6 +87,7 @@ import hk.uwu.reareye.repository.contributor.ContributorRepository
 import hk.uwu.reareye.ui.components.card.SuperCard
 import hk.uwu.reareye.ui.components.motion.ArtRevealItem
 import hk.uwu.reareye.ui.components.motion.ArtStaggeredReveal
+import hk.uwu.reareye.ui.components.update.UpdatePromptSheet
 import hk.uwu.reareye.ui.theme.rearAcrylicEffect
 import hk.uwu.reareye.ui.theme.rearAcrylicSource
 import hk.uwu.reareye.ui.theme.rememberAcrylicHazeState
@@ -98,8 +101,12 @@ import hk.uwu.reareye.utils.pageContentPadding
 import ui.feice.mochi.navigation.LocalMochiBottomBarInset
 import ui.feice.mochi.navigation.MochiTabScaffoldDefaults
 import hk.uwu.reareye.version.SeineProject
+import hk.uwu.reareye.version.SeineRelease
+import hk.uwu.reareye.version.UpdateInfoCache
 import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -120,7 +127,10 @@ import top.yukonga.miuix.kmp.icon.extended.Link
 import top.yukonga.miuix.kmp.theme.MiuixTheme.colorScheme
 import top.yukonga.miuix.kmp.utils.overScrollVertical
 import top.yukonga.miuix.kmp.utils.scrollEndHaptic
+import ui.feice.mochi.basic.MochiSheetDetent
+import ui.feice.mochi.basic.rememberMochiSheetState
 import ui.feice.mochi.icons.MochiIonicon
+import ui.feice.mochi.list.MochiListCard
 import ui.feice.mochi.list.MochiListRow
 import ui.feice.mochi.list.MochiListSection
 
@@ -223,6 +233,7 @@ private fun rememberSkeletonPulseAlpha(label: String): Float {
 @Composable
 fun AboutScreen(
     bottomInnerPadding: Dp = 0.dp,
+    onSubpageChange: (Boolean) -> Unit = {},
 ) {
     val versionText = SeineProject.CURRENT_RELEASE.removePrefix("v")
     val contributorState by ContributorRepository.state.collectAsState()
@@ -234,6 +245,10 @@ fun AboutScreen(
             route = route,
             depth = if (route is AboutRoute.Root) 0 else 1,
         )
+    }
+
+    LaunchedEffect(route) {
+        onSubpageChange(route != AboutRoute.Root)
     }
 
     val entries = remember {
@@ -492,8 +507,9 @@ private fun AboutRootContent(
                     verticalArrangement = Arrangement.spacedBy(AboutCardSpacing),
                 ) {
                     AboutDeviceInfoCard()
+                    AboutUpdateSection(versionText = versionText)
 
-                    MochiListSection {
+                    MochiListCard(showDividers = false) {
                         entries.forEach { entry ->
                             MochiListRow(
                                 title = stringResource(entry.titleRes),
@@ -526,12 +542,79 @@ private fun AboutRootContent(
 @Composable
 private fun AboutDeviceInfoCard() {
     val context = LocalContext.current
-    val osVersion = remember(context) { OSVersionTools.addVersionSuffix(context) }
-    MochiListSection {
-        AboutDeviceInfoRow(stringResource(R.string.device_name), DeviceConfigTools.deviceName)
+    val osVersion = remember(context) {
+        OSVersionTools.addVersionSuffix(context).ifBlank {
+            DeviceConfigTools.getSystemProperties("ro.mi.os.version.incremental")
+                .ifBlank { android.os.Build.VERSION.INCREMENTAL }
+        }
+    }
+    MochiListCard(showDividers = false) {
         AboutDeviceInfoRow(stringResource(R.string.about_device_model), DeviceConfigTools.marketName)
         AboutDeviceInfoRow(stringResource(R.string.os_version), osVersion)
         AboutDeviceInfoRow(stringResource(R.string.android_version), DeviceConfigTools.androidVersion)
+    }
+}
+
+@Composable
+private fun AboutUpdateSection(versionText: String) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var latestRelease by remember { mutableStateOf(UpdateInfoCache.latestRelease) }
+    var checking by remember { mutableStateOf(false) }
+    var checkFailed by remember { mutableStateOf(false) }
+    val availableUpdate = latestRelease?.takeIf { it.isNewerThan(SeineProject.CURRENT_RELEASE) }
+    val updateSheet = rememberMochiSheetState(detents = listOf(MochiSheetDetent.Medium))
+
+    val subtitle = when {
+        checking -> stringResource(R.string.home_update_checking)
+        availableUpdate != null -> stringResource(
+            R.string.seine_about_update_found,
+            availableUpdate.tag.removePrefix("v"),
+        )
+        checkFailed -> stringResource(R.string.seine_about_check_failed)
+        latestRelease != null -> stringResource(R.string.seine_about_up_to_date, versionText)
+        else -> stringResource(R.string.home_update_unknown)
+    }
+
+    MochiListCard(showDividers = false) {
+        MochiListRow(
+            title = stringResource(R.string.seine_about_check_update),
+            subtitle = subtitle,
+            leading = { MochiIonicon("refresh-circle") },
+            onClick = {
+                if (checking) return@MochiListRow
+                if (availableUpdate != null) {
+                    updateSheet.show()
+                    return@MochiListRow
+                }
+                checking = true
+                checkFailed = false
+                scope.launch {
+                    val fetched = UpdateInfoCache.lock.withLock {
+                        SeineProject.latestRelease()?.also { UpdateInfoCache.latestRelease = it }
+                    }
+                    latestRelease = fetched ?: latestRelease
+                    checking = false
+                    if (fetched == null) {
+                        checkFailed = true
+                        context.startActivity(Intent(Intent.ACTION_VIEW, SeineProject.RELEASES.toUri()))
+                    } else if (fetched.isNewerThan(SeineProject.CURRENT_RELEASE)) {
+                        updateSheet.show()
+                    } else {
+                        Toast.makeText(
+                            context,
+                            context.getString(R.string.seine_about_up_to_date, versionText),
+                            Toast.LENGTH_SHORT,
+                        ).show()
+                    }
+                }
+            },
+            chevron = true,
+        )
+    }
+
+    if (availableUpdate != null) {
+        UpdatePromptSheet(updateSheet, availableUpdate)
     }
 }
 

@@ -294,6 +294,7 @@ class MainActivity : ComponentActivity() {
             var showPresetPackDialog by remember { mutableStateOf(false) }
             var navBarVisible by remember { mutableStateOf(false) }
             var configInAppListMode by remember { mutableStateOf(false) }
+            var aboutInSubpage by remember { mutableStateOf(false) }
             var pendingConfigQuickManagerTarget by remember {
                 mutableStateOf<ConfigType.ManagerType?>(null)
             }
@@ -335,7 +336,9 @@ class MainActivity : ComponentActivity() {
                 val glassNavigation = navigationBarMode == ModuleNavigationBarMode.FLOATING_GLASS ||
                     navigationBarMode == ModuleNavigationBarMode.SEMI_TRANSPARENT
                 val showNavigation =
-                    navBarVisible && !(currentScreen == "config" && configInAppListMode)
+                    navBarVisible &&
+                        !(currentScreen == "config" && configInAppListMode) &&
+                        !(currentScreen == "about" && aboutInSubpage)
                 val density = LocalDensity.current
                 val surfaceColor = MiuixTheme.colorScheme.surface
                 val backdrop = if (glassNavigation) rememberMochiBackdrop(surfaceColor) else null
@@ -514,7 +517,10 @@ class MainActivity : ComponentActivity() {
                                                         )
                                                     }
 
-                                                    "about" -> AboutScreen(bottomInnerPadding = stableBottomInset)
+                                                    "about" -> AboutScreen(
+                                                        bottomInnerPadding = stableBottomInset,
+                                                        onSubpageChange = { aboutInSubpage = it },
+                                                    )
                                                 }
                                             }
                                         }
